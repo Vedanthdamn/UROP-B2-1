@@ -186,6 +186,70 @@ Run the demo script to see usage examples:
 python demo_preprocessing.py
 ```
 
+## Model Architectures
+
+The repository includes three FL-friendly model architectures for heart failure prediction:
+
+### Available Models
+
+1. **LSTM Classifier (PRIMARY)** ⭐
+   - Shallow LSTM-based architecture (5,793 parameters)
+   - Designed as the PRIMARY model for federated training
+   - Best balance of performance and FL efficiency
+
+2. **Temporal Convolutional Network (TCN)**
+   - Lightweight causal convolution architecture (961 parameters)
+   - Comparative model for benchmarking
+   - Minimal parameter count for maximum FL efficiency
+
+3. **Lightweight Transformer**
+   - Simple attention-based architecture (1,497 parameters)
+   - Comparative model for benchmarking
+   - Modern architecture with residual connections
+
+### Key Features
+
+- **FL-friendly**: All models use shallow architectures (< 10K parameters)
+- **DP-compatible**: All models support differential privacy training
+- **Edge-optimized**: Suitable for deployment on edge devices
+- **Well-documented**: Comprehensive documentation and examples
+
+### Usage
+
+```python
+from models import get_primary_model
+from utils.preprocessing import load_and_preprocess_data
+import numpy as np
+
+# Load and preprocess data
+X, y, preprocessor = load_and_preprocess_data('data/heart_failure.csv', fit=True)
+
+# Reshape for model input (add sequence dimension)
+X_reshaped = X.reshape(-1, 1, 12)
+
+# Get primary model (LSTM)
+model = get_primary_model(input_shape=(1, 12))
+
+# Model is ready for federated training
+# model.fit(X_reshaped, y, ...)
+```
+
+### Testing and Demo
+
+Run the test suite to validate all models:
+
+```bash
+python test_models.py
+```
+
+Run the demo script to see usage examples:
+
+```bash
+python demo_models.py
+```
+
+For detailed documentation, see [models/README.md](models/README.md).
+
 ## Project Structure
 
 ```
@@ -196,14 +260,22 @@ UROP-B2-1/
 │   ├── __init__.py                 # Package initialization
 │   ├── preprocessing.py            # Preprocessing pipeline implementation
 │   └── data_sampling.py            # Dataset sampling module
+├── models/
+│   ├── __init__.py                 # Model registry and factory functions
+│   ├── lstm_classifier.py          # LSTM Classifier (PRIMARY)
+│   ├── tcn_classifier.py           # TCN Classifier
+│   ├── transformer_classifier.py   # Transformer Classifier
+│   └── README.md                   # Model documentation
 ├── reports/
 │   ├── data_profile.md             # Dataset profiling report
 │   └── sampling_summary.md         # Sampling operation report
 ├── validate_dataset.py             # Repository and dataset validation script
 ├── test_preprocessing.py           # Preprocessing pipeline test suite
 ├── test_sampling.py                # Dataset sampling test suite
+├── test_models.py                  # Model architectures test suite
 ├── demo_preprocessing.py           # Preprocessing usage demonstration
 ├── demo_sampling.py                # Dataset sampling usage demonstration
+├── demo_models.py                  # Model architectures demonstration
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
