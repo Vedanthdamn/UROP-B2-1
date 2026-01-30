@@ -55,6 +55,71 @@ The `data/heart_failure.csv` dataset contains medical records for heart failure 
 - **time**: Follow-up period (days)
 - **DEATH_EVENT**: If the patient deceased during the follow-up period (target variable)
 
+## Dataset Sampling
+
+The repository includes a deterministic dataset sampling module for creating reproducible training subsets for federated learning experiments.
+
+### Features
+
+- **Deterministic Sampling**: Uses fixed random seed for reproducibility
+- **Stratified Sampling**: Preserves original class distribution
+- **Comprehensive Logging**: Logs random seed and class distributions
+- **Automatic Reporting**: Generates detailed markdown reports
+- **Edge Case Handling**: Handles cases where sample size exceeds dataset size
+
+### Usage
+
+#### Basic Usage with Convenience Function
+
+```python
+from utils.data_sampling import sample_heart_failure_data
+
+# Sample data and generate report
+sampled_data = sample_heart_failure_data(
+    'data/heart_failure.csv',
+    n_samples=300,
+    random_seed=42,
+    output_report_path='reports/sampling_summary.md'
+)
+```
+
+#### Advanced Usage with DatasetSampler Class
+
+```python
+from utils.data_sampling import DatasetSampler
+import pandas as pd
+
+# Load data
+data = pd.read_csv('data/heart_failure.csv')
+
+# Create sampler with custom seed
+sampler = DatasetSampler(random_seed=123)
+
+# Perform stratified sampling
+sampled_data = sampler.sample(data, n_samples=150, stratify=True)
+
+# Get sampling summary
+summary = sampler.get_sampling_summary()
+print(f"Distribution preserved: {summary['distribution_preserved']}")
+
+# Generate report
+sampler.generate_report('reports/custom_sampling.md')
+```
+
+### Testing and Demo
+
+Run the test suite to validate the sampling functionality:
+
+```bash
+python test_sampling.py
+```
+
+Run the demo script to see usage examples:
+
+```bash
+python demo_sampling.py
+```
+
 ## Preprocessing Pipeline
 
 The repository includes a reusable preprocessing pipeline for federated learning, designed to ensure consistency across all federated clients.
@@ -129,10 +194,16 @@ UROP-B2-1/
 │   └── heart_failure.csv           # Heart failure clinical records dataset
 ├── utils/
 │   ├── __init__.py                 # Package initialization
-│   └── preprocessing.py            # Preprocessing pipeline implementation
+│   ├── preprocessing.py            # Preprocessing pipeline implementation
+│   └── data_sampling.py            # Dataset sampling module
+├── reports/
+│   ├── data_profile.md             # Dataset profiling report
+│   └── sampling_summary.md         # Sampling operation report
 ├── validate_dataset.py             # Repository and dataset validation script
 ├── test_preprocessing.py           # Preprocessing pipeline test suite
+├── test_sampling.py                # Dataset sampling test suite
 ├── demo_preprocessing.py           # Preprocessing usage demonstration
+├── demo_sampling.py                # Dataset sampling usage demonstration
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
