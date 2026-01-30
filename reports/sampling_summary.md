@@ -2,7 +2,7 @@
 
 ## Overview
 - **Random Seed**: 42
-- **Sample Size**: 300 records
+- **Sample Size**: 299 records
 - **Original Dataset Size**: 299 records
 - **Sampling Method**: Stratified sampling (preserving class distribution)
 
