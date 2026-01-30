@@ -250,6 +250,78 @@ python demo_models.py
 
 For detailed documentation, see [models/README.md](models/README.md).
 
+## Federated Learning Clients
+
+The repository includes Flower federated learning client implementations for privacy-preserving training across hospitals.
+
+### Features
+
+- **Privacy-Preserving**: Raw patient data never leaves the client
+- **LSTM Model**: Uses the PRIMARY TensorFlow LSTM model
+- **Non-IID Data**: Supports non-IID hospital datasets
+- **Configurable**: Reusable client with configurable parameters
+- **Secure**: No patient-level data logging, only aggregated metrics
+
+### Usage
+
+#### Basic Usage
+
+```python
+from federated import create_flower_client
+from utils.client_partitioning import partition_for_federated_clients
+from utils.preprocessing import create_preprocessing_pipeline
+import pandas as pd
+
+# Partition data for federated clients
+client_datasets = partition_for_federated_clients(
+    data_path='data/heart_failure.csv',
+    n_clients=5,
+    random_seed=42
+)
+
+# Create and fit preprocessing pipeline
+data = pd.read_csv('data/heart_failure.csv')
+preprocessor = create_preprocessing_pipeline()
+preprocessor.fit(data)
+
+# Create Flower client for a hospital
+client = create_flower_client(
+    client_data=client_datasets[0],
+    preprocessor=preprocessor,
+    val_split=0.2,
+    epochs_per_round=5,
+    batch_size=32,
+    client_id="hospital_0"
+)
+```
+
+#### Federated Training Workflow
+
+```python
+# Get initial model weights
+params = client.get_parameters(config={})
+
+# Train locally
+updated_params, n_samples, metrics = client.fit(params, config={})
+
+# Evaluate model
+loss, n_samples, eval_metrics = client.evaluate(updated_params, config={})
+```
+
+### Testing and Demo
+
+Run the test suite to validate federated client functionality:
+
+```bash
+python test_federated_client.py
+```
+
+Run the demo script to see federated learning in action:
+
+```bash
+python demo_federated_client.py
+```
+
 ## Project Structure
 
 ```
@@ -259,23 +331,32 @@ UROP-B2-1/
 ├── utils/
 │   ├── __init__.py                 # Package initialization
 │   ├── preprocessing.py            # Preprocessing pipeline implementation
-│   └── data_sampling.py            # Dataset sampling module
+│   ├── data_sampling.py            # Dataset sampling module
+│   └── client_partitioning.py      # Non-IID data partitioning for FL
 ├── models/
 │   ├── __init__.py                 # Model registry and factory functions
 │   ├── lstm_classifier.py          # LSTM Classifier (PRIMARY)
 │   ├── tcn_classifier.py           # TCN Classifier
 │   ├── transformer_classifier.py   # Transformer Classifier
 │   └── README.md                   # Model documentation
+├── federated/
+│   ├── __init__.py                 # Federated learning module initialization
+│   └── client.py                   # Flower federated client implementation
 ├── reports/
 │   ├── data_profile.md             # Dataset profiling report
-│   └── sampling_summary.md         # Sampling operation report
+│   ├── sampling_summary.md         # Sampling operation report
+│   └── client_partition_summary.md # Client partitioning report
 ├── validate_dataset.py             # Repository and dataset validation script
 ├── test_preprocessing.py           # Preprocessing pipeline test suite
 ├── test_sampling.py                # Dataset sampling test suite
 ├── test_models.py                  # Model architectures test suite
+├── test_client_partitioning.py     # Client partitioning test suite
+├── test_federated_client.py        # Federated client test suite
 ├── demo_preprocessing.py           # Preprocessing usage demonstration
 ├── demo_sampling.py                # Dataset sampling usage demonstration
 ├── demo_models.py                  # Model architectures demonstration
+├── demo_client_partitioning.py     # Client partitioning demonstration
+├── demo_federated_client.py        # Federated client demonstration
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
@@ -287,3 +368,19 @@ UROP-B2-1/
 - Do NOT create derived datasets without proper documentation
 - The validation script only checks existence and readability, it does not perform preprocessing or training
 - The preprocessing pipeline is designed for federated learning and must be used consistently across all clients
+
+## Privacy and Security
+
+This repository implements privacy-preserving federated learning with the following guarantees:
+
+- **Data Privacy**: Raw patient data never leaves the client device
+- **Weight-Only Sharing**: Only model weights are transmitted to the server
+- **No Patient Logging**: Patient-level data is never logged, only aggregated metrics
+- **Secure Training**: Local training on each hospital's own data
+- **Non-IID Support**: Handles realistic non-IID data distributions across hospitals
+
+For production deployments, consider additional security measures such as:
+- Differential privacy during training
+- Secure aggregation protocols
+- Encrypted communication channels
+- Access control and authentication
