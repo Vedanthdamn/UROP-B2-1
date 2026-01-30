@@ -22,10 +22,37 @@ def inspect_dataset(data_path):
         data_path: Path to the CSV dataset
         
     Returns:
-        dict: Dictionary containing all inspection results
+        dict: Dictionary containing all inspection results with keys:
+            - column_names: List of column names
+            - data_types: Dict mapping column names to pandas dtypes
+            - missing_values: Dict mapping column names to missing value counts
+            - total_records: Integer count of total rows
+            - target_variable: String name of the target variable
+            - class_distribution: Dict mapping class labels to counts
+            - classification_type: String ('binary' or 'multi-class')
+    
+    Raises:
+        FileNotFoundError: If the dataset file doesn't exist
+        pd.errors.EmptyDataError: If the dataset is empty
+        pd.errors.ParserError: If the CSV file is malformed
+        KeyError: If the target variable column is not found
     """
-    # Load the dataset
-    df = pd.read_csv(data_path)
+    try:
+        # Load the dataset
+        df = pd.read_csv(data_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Dataset file not found: {data_path}")
+    except pd.errors.EmptyDataError:
+        raise pd.errors.EmptyDataError(f"Dataset file is empty: {data_path}")
+    except pd.errors.ParserError as e:
+        raise pd.errors.ParserError(f"Failed to parse dataset: {e}")
+    
+    # Define target variable (as documented in README.md)
+    target_variable = 'DEATH_EVENT'
+    
+    # Validate target variable exists
+    if target_variable not in df.columns:
+        raise KeyError(f"Target variable '{target_variable}' not found in dataset. Available columns: {df.columns.tolist()}")
     
     # Extract inspection information
     inspection_results = {
@@ -33,12 +60,12 @@ def inspect_dataset(data_path):
         'data_types': df.dtypes.to_dict(),
         'missing_values': df.isnull().sum().to_dict(),
         'total_records': len(df),
-        'target_variable': 'DEATH_EVENT',  # As documented in README.md
-        'class_distribution': df['DEATH_EVENT'].value_counts().to_dict()
+        'target_variable': target_variable,
+        'class_distribution': df[target_variable].value_counts().to_dict()
     }
     
     # Determine classification type
-    num_classes = df['DEATH_EVENT'].nunique()
+    num_classes = df[target_variable].nunique()
     inspection_results['classification_type'] = 'binary' if num_classes == 2 else 'multi-class'
     
     return inspection_results
@@ -49,8 +76,11 @@ def generate_markdown_report(results, output_path):
     Generate a structured markdown report from inspection results.
     
     Args:
-        results: Dictionary containing inspection results
-        output_path: Path where the report should be saved
+        results: Dictionary containing inspection results (from inspect_dataset)
+        output_path: Path where the report should be saved (directories will be created if needed)
+        
+    Raises:
+        OSError: If there are permission issues or disk space problems
     """
     report_lines = []
     
@@ -161,23 +191,37 @@ def main():
     print(f"Inspecting dataset: {data_path}")
     print()
     
-    # Perform inspection
-    results = inspect_dataset(data_path)
-    
-    # Display summary
-    print(f"Total Records: {results['total_records']}")
-    print(f"Total Features: {len(results['column_names'])}")
-    print(f"Target Variable: {results['target_variable']}")
-    print(f"Classification Type: {results['classification_type'].capitalize()}")
-    print()
-    
-    # Generate report
-    generate_markdown_report(results, output_path)
-    
-    print()
-    print("=" * 60)
-    print("INSPECTION COMPLETE")
-    print("=" * 60)
+    try:
+        # Perform inspection
+        results = inspect_dataset(data_path)
+        
+        # Display summary
+        print(f"Total Records: {results['total_records']}")
+        print(f"Total Features: {len(results['column_names'])}")
+        print(f"Target Variable: {results['target_variable']}")
+        print(f"Classification Type: {results['classification_type'].capitalize()}")
+        print()
+        
+        # Generate report
+        generate_markdown_report(results, output_path)
+        
+        print()
+        print("=" * 60)
+        print("INSPECTION COMPLETE")
+        print("=" * 60)
+        
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, KeyError) as e:
+        print(f"✗ ERROR: {e}")
+        print()
+        print("=" * 60)
+        print("INSPECTION FAILED")
+        print("=" * 60)
+    except Exception as e:
+        print(f"✗ UNEXPECTED ERROR: {e}")
+        print()
+        print("=" * 60)
+        print("INSPECTION FAILED")
+        print("=" * 60)
 
 
 if __name__ == "__main__":
