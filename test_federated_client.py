@@ -264,7 +264,7 @@ def test_no_patient_data_in_parameters():
     # Verify that parameters do not contain patient data
     # Patient data has value 999.0, model weights should be different
     for i, param in enumerate(params):
-        # Check that not all values are 999.0 (patient data marker)
+        # Check that no values are 999.0 (patient data marker)
         has_patient_data = np.any(np.abs(param - 999.0) < 1e-6)
         assert not has_patient_data, f"Parameter {i} appears to contain patient data"
     

@@ -25,6 +25,7 @@ Author: Federated Learning Medical AI Project
 """
 
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 from typing import Dict, List, Tuple, Optional
 import logging
@@ -312,10 +313,10 @@ def create_flower_client(
         >>> import pandas as pd
         >>> 
         >>> # Load and partition data
-        >>> data = pd.read_csv('data/heart_failure.csv')
-        >>> client_datasets = partition_for_federated_clients(data, n_clients=5)
+        >>> client_datasets = partition_for_federated_clients('data/heart_failure.csv', n_clients=5)
         >>> 
         >>> # Create and fit preprocessor (centrally or on aggregated data)
+        >>> data = pd.read_csv('data/heart_failure.csv')
         >>> preprocessor = create_preprocessing_pipeline()
         >>> preprocessor.fit(data)
         >>> 
@@ -326,8 +327,6 @@ def create_flower_client(
         ...     client_id="hospital_0"
         ... )
     """
-    import pandas as pd
-    
     # Convert to DataFrame if needed
     if isinstance(client_data, np.ndarray):
         # Assume it's already in the correct format
