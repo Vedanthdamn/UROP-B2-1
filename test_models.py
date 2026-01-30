@@ -210,7 +210,9 @@ def test_customization():
     
     # LSTM with custom params
     lstm = create_lstm_classifier(input_shape=(1, 12), lstm_units=64, dropout_rate=0.5)
-    assert lstm.layers[1].units == 64, "LSTM units should be customizable"
+    # Find LSTM layer by name instead of relying on index
+    lstm_layer = lstm.get_layer('lstm')
+    assert lstm_layer.units == 64, "LSTM units should be customizable"
     
     # TCN with custom params
     tcn = create_tcn_classifier(input_shape=(1, 12), filters=64, kernel_size=3)

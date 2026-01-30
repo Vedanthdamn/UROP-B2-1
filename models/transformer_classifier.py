@@ -33,7 +33,7 @@ class TransformerClassifier:
     Lightweight Transformer-based binary classifier for federated medical classification.
     
     This is a COMPARATIVE model for benchmarking against LSTM. The architecture uses:
-    - Single-head multi-head attention layer
+    - Single-head attention (lightweight)
     - Layer normalization for training stability
     - Feed-forward network
     - Shallow design to minimize parameters

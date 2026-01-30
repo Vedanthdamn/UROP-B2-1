@@ -31,6 +31,10 @@ __all__ = [
     'create_tcn_classifier',
     'TransformerClassifier',
     'create_transformer_classifier',
+    'get_model',
+    'get_primary_model',
+    'MODEL_REGISTRY',
+    'PRIMARY_MODEL',
 ]
 
 # Model registry

@@ -121,9 +121,9 @@ model.summary()
 
 | Model | Type | Parameters | Key Feature | FL Efficiency |
 |-------|------|------------|-------------|---------------|
-| **LSTM** | **PRIMARY** | ~4K-5K | Temporal patterns | **High** |
-| TCN | Comparative | ~1K-2K | Causal convolutions | High |
-| Transformer | Comparative | ~5K-6K | Self-attention | Medium-High |
+| **LSTM** | **PRIMARY** | ~5K-6K | Temporal patterns | **High** |
+| TCN | Comparative | ~1K | Causal convolutions | Very High |
+| Transformer | Comparative | ~1K-2K | Self-attention | High |
 
 *Note: Exact parameter counts depend on input dimensions and hyperparameters*
 
