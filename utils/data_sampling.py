@@ -51,9 +51,6 @@ class DatasetSampler:
         self.original_distribution = None
         self.sampled_distribution = None
         
-        # Set random seed for reproducibility
-        np.random.seed(self.random_seed)
-        
         logger.info(f"DatasetSampler initialized with random_seed={random_seed}")
     
     def sample(self, 
@@ -64,8 +61,8 @@ class DatasetSampler:
         Sample data with stratification to preserve class distribution.
         
         This method performs deterministic sampling using the configured random seed.
-        If stratified sampling is enabled, it attempts to maintain the original
-        class distribution in the sampled dataset.
+        If stratified sampling is enabled and n_samples < dataset size, it 
+        maintains the original class distribution in the sampled dataset.
         
         Args:
             data (pd.DataFrame): Original dataset to sample from
@@ -78,8 +75,6 @@ class DatasetSampler:
         Raises:
             ValueError: If target column is not found or sample size is invalid
         """
-        self.sample_size = n_samples
-        
         # Validate inputs
         if self.target_column not in data.columns:
             raise ValueError(f"Target column '{self.target_column}' not found in data. "
@@ -93,6 +88,9 @@ class DatasetSampler:
                          f"({len(data)}). Sampling all available records.")
             n_samples = len(data)
         
+        # Set sample_size after adjustment
+        self.sample_size = n_samples
+        
         # Calculate original class distribution
         self.original_distribution = data[self.target_column].value_counts().to_dict()
         logger.info(f"Original dataset size: {len(data)}")
@@ -103,8 +101,7 @@ class DatasetSampler:
             # Stratified sampling to preserve class distribution
             sampled_data = self._stratified_sample(data, n_samples)
         else:
-            # If sampling all records or stratification disabled, just return all data
-            # (shuffled for consistency)
+            # If sampling all records or stratification disabled, return shuffled data
             sampled_data = data.sample(n=n_samples, random_state=self.random_seed)
         
         # Calculate sampled class distribution
@@ -155,16 +152,17 @@ class DatasetSampler:
             # Ensure we don't try to sample more than available
             n_class_samples = min(n_class_samples, len(class_data))
             
+            # Use hash of class_label for deterministic per-class seed
             sampled_class = class_data.sample(
                 n=n_class_samples, 
-                random_state=self.random_seed + int(class_label)
+                random_state=self.random_seed + hash(class_label)
             )
             sampled_dfs.append(sampled_class)
         
         # Combine all class samples
         sampled_data = pd.concat(sampled_dfs, ignore_index=True)
         
-        # Shuffle the combined sample for good measure
+        # Shuffle the combined sample to randomize class order while maintaining reproducibility
         sampled_data = sampled_data.sample(
             frac=1.0, 
             random_state=self.random_seed

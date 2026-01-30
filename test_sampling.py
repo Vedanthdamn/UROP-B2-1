@@ -100,8 +100,13 @@ def test_sample_size_exceeds_dataset():
     # Should return all available records
     assert len(sampled) == original_size, f"Expected {original_size} records, got {len(sampled)}"
     
-    # Check that all classes are present
-    assert sampled['DEATH_EVENT'].value_counts().to_dict() == df['DEATH_EVENT'].value_counts().to_dict()
+    # Check that all classes are present with correct counts
+    original_counts = df['DEATH_EVENT'].value_counts().to_dict()
+    sampled_counts = sampled['DEATH_EVENT'].value_counts().to_dict()
+    for class_label in original_counts:
+        assert class_label in sampled_counts, f"Class {class_label} missing from sample"
+        assert sampled_counts[class_label] == original_counts[class_label], \
+            f"Class {class_label} count mismatch: {sampled_counts[class_label]} != {original_counts[class_label]}"
     
     print(f"✓ Requested: 500 records")
     print(f"✓ Available: {original_size} records")
