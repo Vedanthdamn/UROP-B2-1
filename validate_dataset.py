@@ -16,6 +16,11 @@ import sys
 import pandas as pd
 
 
+# Constants
+DATA_FOLDER = "data/"
+DATA_FILE = "data/heart_failure.csv"
+
+
 def validate_repository_integrity():
     """
     Step 1: Verify repository integrity
@@ -27,19 +32,17 @@ def validate_repository_integrity():
     print("=" * 60)
     
     # Check data/ folder
-    data_folder = "data/"
-    if os.path.exists(data_folder) and os.path.isdir(data_folder):
-        print(f"✓ Folder '{data_folder}' exists")
+    if os.path.exists(DATA_FOLDER) and os.path.isdir(DATA_FOLDER):
+        print(f"✓ Folder '{DATA_FOLDER}' exists")
     else:
-        print(f"✗ ERROR: Folder '{data_folder}' does not exist")
+        print(f"✗ ERROR: Folder '{DATA_FOLDER}' does not exist")
         return False
     
     # Check data/heart_failure.csv file
-    data_file = "data/heart_failure.csv"
-    if os.path.exists(data_file) and os.path.isfile(data_file):
-        print(f"✓ File '{data_file}' exists")
+    if os.path.exists(DATA_FILE) and os.path.isfile(DATA_FILE):
+        print(f"✓ File '{DATA_FILE}' exists")
     else:
-        print(f"✗ ERROR: File '{data_file}' does not exist")
+        print(f"✗ ERROR: File '{DATA_FILE}' does not exist")
         return False
     
     print("\nRepository integrity validation: PASSED\n")
@@ -58,11 +61,9 @@ def validate_dataset():
     print("STEP 2: Dataset Validation")
     print("=" * 60)
     
-    data_file = "data/heart_failure.csv"
-    
     try:
         # Load the dataset using pandas
-        df = pd.read_csv(data_file)
+        df = pd.read_csv(DATA_FILE)
         print(f"✓ Dataset loaded successfully\n")
         
         # Print dataset shape
@@ -80,13 +81,13 @@ def validate_dataset():
         return True
         
     except FileNotFoundError:
-        print(f"✗ ERROR: File '{data_file}' not found")
+        print(f"✗ ERROR: File '{DATA_FILE}' not found")
         return False
     except pd.errors.EmptyDataError:
-        print(f"✗ ERROR: File '{data_file}' is empty")
+        print(f"✗ ERROR: File '{DATA_FILE}' is empty")
         return False
     except pd.errors.ParserError as e:
-        print(f"✗ ERROR: Failed to parse '{data_file}': {e}")
+        print(f"✗ ERROR: Failed to parse '{DATA_FILE}': {e}")
         return False
     except Exception as e:
         print(f"✗ ERROR: Failed to load dataset: {e}")
