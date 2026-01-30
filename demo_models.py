@@ -115,40 +115,45 @@ def demo_integration_with_preprocessing():
     print("=" * 80)
     print()
     
-    # Load and preprocess data
-    print("Loading and preprocessing heart failure data...")
-    df = pd.read_csv('data/heart_failure.csv')
-    print(f"Loaded data: {df.shape}")
-    
-    # Create and fit preprocessor
-    preprocessor = create_preprocessing_pipeline()
-    X, y = preprocessor.fit_transform(df)
-    print(f"Preprocessed features: {X.shape}")
-    print(f"Target: {y.shape}")
-    print()
-    
-    # Reshape for model input (add sequence dimension)
-    print("Reshaping data for model input...")
-    X_reshaped = X.reshape(-1, 1, 12)  # (n_samples, sequence_length, n_features)
-    print(f"Reshaped features: {X_reshaped.shape}")
-    print()
-    
-    # Get primary model
-    print("Creating primary model (LSTM)...")
-    model = get_primary_model(input_shape=(1, 12))
-    print(f"Model: {model.name}")
-    print(f"Parameters: {model.count_params():,}")
-    print()
-    
-    # Make predictions (without training)
-    print("Making predictions on first 10 samples (no training)...")
-    predictions = model.predict(X_reshaped[:10], verbose=0)
-    print(f"Predictions shape: {predictions.shape}")
-    print(f"Predictions (first 5): {predictions[:5].flatten()}")
-    print(f"All predictions in [0,1]: {np.all((predictions >= 0) & (predictions <= 1))}")
-    print()
-    
-    print("✓ Integration successful!")
+    try:
+        # Load and preprocess data
+        print("Loading and preprocessing heart failure data...")
+        df = pd.read_csv('data/heart_failure.csv')
+        print(f"Loaded data: {df.shape}")
+        
+        # Create and fit preprocessor
+        preprocessor = create_preprocessing_pipeline()
+        X, y = preprocessor.fit_transform(df)
+        print(f"Preprocessed features: {X.shape}")
+        print(f"Target: {y.shape}")
+        print()
+        
+        # Reshape for model input (add sequence dimension)
+        print("Reshaping data for model input...")
+        X_reshaped = X.reshape(-1, 1, 12)  # (n_samples, sequence_length, n_features)
+        print(f"Reshaped features: {X_reshaped.shape}")
+        print()
+        
+        # Get primary model
+        print("Creating primary model (LSTM)...")
+        model = get_primary_model(input_shape=(1, 12))
+        print(f"Model: {model.name}")
+        print(f"Parameters: {model.count_params():,}")
+        print()
+        
+        # Make predictions (without training)
+        print("Making predictions on first 10 samples (no training)...")
+        predictions = model.predict(X_reshaped[:10], verbose=0)
+        print(f"Predictions shape: {predictions.shape}")
+        print(f"Predictions (first 5): {predictions[:5].flatten()}")
+        print(f"All predictions in [0,1]: {np.all((predictions >= 0) & (predictions <= 1))}")
+        print()
+        
+        print("✓ Integration successful!")
+    except FileNotFoundError:
+        print("  ⚠ Integration demo skipped: data/heart_failure.csv not found")
+    except Exception as e:
+        print(f"  ⚠ Integration demo skipped: {e}")
     print()
 
 
