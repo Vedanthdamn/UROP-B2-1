@@ -308,6 +308,111 @@ def test_load_and_preprocess_helper():
     return True
 
 
+def test_numpy_array_input():
+    """Test that preprocessor accepts numpy arrays as input."""
+    print("=" * 60)
+    print("TEST 9: NumPy Array Input")
+    print("=" * 60)
+    
+    # Load dataset and convert to numpy
+    df = pd.read_csv('data/heart_failure.csv')
+    data_array = df.values
+    
+    # Create and fit preprocessor with numpy array
+    preprocessor = create_preprocessing_pipeline()
+    X, y = preprocessor.fit_transform(data_array)
+    
+    # Validate results
+    assert X.shape[0] == data_array.shape[0], "Row count mismatch"
+    assert X.shape[1] == data_array.shape[1] - 1, "Feature count mismatch"
+    assert y.shape[0] == data_array.shape[0], "Target count mismatch"
+    
+    print(f"✓ Preprocessor accepts numpy array input")
+    print(f"✓ X shape: {X.shape}")
+    print(f"✓ y shape: {y.shape}")
+    
+    # Test transform with numpy array
+    X2, y2 = preprocessor.transform(data_array)
+    assert np.allclose(X, X2), "Transform with numpy array produces different results"
+    
+    print(f"✓ Transform with numpy array works correctly")
+    print(f"✓ NumPy array input: PASSED\n")
+    return True
+
+
+def test_constant_features():
+    """Test that preprocessor handles constant features correctly."""
+    print("=" * 60)
+    print("TEST 10: Constant Features Handling")
+    print("=" * 60)
+    
+    # Create data with constant features
+    data = pd.DataFrame({
+        'feature1': [1.0, 2.0, 3.0, 4.0, 5.0],
+        'feature2': [5.0, 5.0, 5.0, 5.0, 5.0],  # Constant feature
+        'feature3': [10.0, 20.0, 30.0, 40.0, 50.0],
+        'DEATH_EVENT': [0, 1, 0, 1, 0]
+    })
+    
+    # Fit preprocessor
+    preprocessor = create_preprocessing_pipeline()
+    X, y = preprocessor.fit_transform(data)
+    
+    # Check that std for constant feature was replaced with 1.0
+    assert preprocessor.feature_stds[1] == 1.0, \
+        f"Constant feature std should be 1.0, got {preprocessor.feature_stds[1]}"
+    
+    # Check that no NaN or inf values in output
+    assert not np.isnan(X).any(), "NaN values found in output"
+    assert not np.isinf(X).any(), "Inf values found in output"
+    
+    # Check that constant feature has zero variance in output
+    assert np.allclose(X[:, 1], 0.0), \
+        f"Constant feature should have zero variance after standardization"
+    
+    print(f"✓ Constant feature std replaced with 1.0")
+    print(f"✓ No NaN or Inf values in output")
+    print(f"✓ Constant feature properly standardized to 0")
+    print(f"✓ Constant features handling: PASSED\n")
+    return True
+
+
+def test_inference_validation():
+    """Test that inference mode validates feature columns."""
+    print("=" * 60)
+    print("TEST 11: Inference Mode Column Validation")
+    print("=" * 60)
+    
+    # Load and fit preprocessor
+    df = pd.read_csv('data/heart_failure.csv')
+    preprocessor = create_preprocessing_pipeline()
+    preprocessor.fit(df)
+    
+    # Test with incorrect columns
+    try:
+        bad_data = pd.DataFrame({
+            'wrong_column': [1, 2, 3],
+            'another_wrong': [4, 5, 6]
+        })
+        preprocessor.transform(bad_data, return_target=False)
+        assert False, "Should raise ValueError for missing columns"
+    except ValueError as e:
+        print(f"✓ Correctly raises ValueError for missing columns")
+        assert "missing expected feature columns" in str(e).lower(), \
+            f"Error message should mention missing columns"
+    
+    # Test with subset of columns
+    try:
+        subset_data = df[['age', 'anaemia']].copy()  # Only 2 features
+        preprocessor.transform(subset_data, return_target=False)
+        assert False, "Should raise ValueError for missing columns"
+    except ValueError:
+        print(f"✓ Correctly raises ValueError for incomplete feature set")
+    
+    print(f"✓ Inference mode validation: PASSED\n")
+    return True
+
+
 def run_all_tests():
     """Run all tests and report results."""
     print("\n" + "=" * 60)
@@ -323,6 +428,9 @@ def run_all_tests():
         test_inference_mode,
         test_error_handling,
         test_load_and_preprocess_helper,
+        test_numpy_array_input,
+        test_constant_features,
+        test_inference_validation,
     ]
     
     passed = 0

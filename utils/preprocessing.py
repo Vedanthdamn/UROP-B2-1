@@ -8,7 +8,7 @@ all federated clients.
 Key Features:
 - Separates features and target label (DEATH_EVENT)
 - Handles missing values safely
-- Standardizes numerical features using StandardScaler
+- Standardizes numerical features using z-score normalization
 - Ensures deterministic and reproducible preprocessing
 - Serializable and reusable during inference
 
@@ -164,20 +164,20 @@ class HeartFailurePreprocessor:
             y = data[self.target_column].values
         else:
             # For inference, we may not have target column
-            X = data[self.feature_columns] if self.target_column in data.columns \
-                else data
+            # Validate that data contains expected feature columns
+            missing_features = set(self.feature_columns) - set(data.columns)
+            if missing_features:
+                raise ValueError(f"Data is missing expected feature columns: {missing_features}. "
+                               f"Expected: {self.feature_columns}")
+            X = data[self.feature_columns]
         
         # Convert to numpy
         X_np = X.values.astype(np.float64)
         
         # Step 1: Handle missing values (impute with median)
-        # Create a mask for missing values
-        missing_mask = np.isnan(X_np)
-        if missing_mask.any():
-            # Replace missing values with median
-            for i in range(X_np.shape[1]):
-                if missing_mask[:, i].any():
-                    X_np[missing_mask[:, i], i] = self.feature_medians[i]
+        # Use NumPy broadcasting for efficient imputation
+        if np.isnan(X_np).any():
+            X_np = np.where(np.isnan(X_np), self.feature_medians, X_np)
         
         # Step 2: Standardize features (z-score normalization)
         # Formula: X_scaled = (X - mean) / std
@@ -236,6 +236,11 @@ class HeartFailurePreprocessor:
         
         Raises:
             FileNotFoundError: If the file does not exist.
+        
+        Warning:
+            Only load preprocessor files from trusted sources. Pickle can execute
+            arbitrary code during deserialization, which could be a security risk
+            if loading files from untrusted origins.
         """
         with open(filepath, 'rb') as f:
             preprocessor = pickle.load(f)

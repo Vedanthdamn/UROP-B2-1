@@ -95,7 +95,7 @@ X, y, preprocessor = load_and_preprocess_data('data/heart_failure.csv', fit=True
 #### Federated Learning Workflow
 
 ```python
-from utils.preprocessing import HeartFailurePreprocessor
+from utils.preprocessing import HeartFailurePreprocessor, create_preprocessing_pipeline
 
 # On central server: fit and save preprocessor
 preprocessor = create_preprocessing_pipeline()
