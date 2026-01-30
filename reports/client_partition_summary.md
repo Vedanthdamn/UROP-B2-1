@@ -100,3 +100,6 @@ Running the partition with the same seed will always produce the same results.
 - Different sample sizes simulate real-world scenarios where hospitals have different patient volumes
 - Different class distributions simulate different patient populations across hospitals
 - No samples overlap between clients (proper partitioning without duplication)
+- The last client receives all remaining samples, which may result in extreme class distributions
+  in some cases. This simulates real-world scenarios where some hospitals may have highly
+  imbalanced patient populations.

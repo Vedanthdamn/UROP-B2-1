@@ -131,12 +131,13 @@ class ClientDataPartitioner:
         # Define different class distributions for each client
         # Each tuple is (proportion_class_0, proportion_class_1)
         # Different ratios simulate different hospital populations
+        # Note: Last client will get remaining samples, so its distribution may vary
         class_distributions = [
             (0.75, 0.25),  # Client 0: Heavy on class 0
             (0.60, 0.40),  # Client 1: Moderate bias to class 0
             (0.50, 0.50),  # Client 2: Balanced
             (0.35, 0.65),  # Client 3: Moderate bias to class 1
-            (0.20, 0.80),  # Client 4: Heavy on class 1
+            (0.30, 0.70),  # Client 4: Will use remaining samples
         ]
         
         client_datasets = []
@@ -159,14 +160,6 @@ class ClientDataPartitioner:
                 # Ensure we don't exceed available samples
                 n_class_0 = min(n_class_0, len(class_0_data) - class_0_index)
                 n_class_1 = min(n_class_1, len(class_1_data) - class_1_index)
-                
-                # Adjust if we run out of one class
-                if class_0_index + n_class_0 > len(class_0_data):
-                    n_class_0 = len(class_0_data) - class_0_index
-                    n_class_1 = client_size - n_class_0
-                if class_1_index + n_class_1 > len(class_1_data):
-                    n_class_1 = len(class_1_data) - class_1_index
-                    n_class_0 = client_size - n_class_1
             
             # Extract samples for this client
             client_class_0 = class_0_data.iloc[class_0_index:class_0_index + n_class_0]
@@ -394,6 +387,9 @@ class ClientDataPartitioner:
             "- Different sample sizes simulate real-world scenarios where hospitals have different patient volumes",
             "- Different class distributions simulate different patient populations across hospitals",
             "- No samples overlap between clients (proper partitioning without duplication)",
+            "- The last client receives all remaining samples, which may result in extreme class distributions",
+            "  in some cases. This simulates real-world scenarios where some hospitals may have highly",
+            "  imbalanced patient populations.",
             ""
         ])
         
