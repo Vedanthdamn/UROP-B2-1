@@ -251,10 +251,22 @@
             Always consult with qualified healthcare professionals for medical advice and diagnosis.
         </div>
         
-        <div class="upload-section" id="uploadSection" role="button" aria-label="Upload patient report CSV file" tabindex="0">
+        <!-- File Type Selection -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <label style="margin-right: 20px; font-size: 16px;">
+                <input type="radio" name="fileType" value="csv" id="csvRadio" checked style="margin-right: 5px;">
+                CSV Format
+            </label>
+            <label style="font-size: 16px;">
+                <input type="radio" name="fileType" value="pdf" id="pdfRadio" style="margin-right: 5px;">
+                PDF Blood Report
+            </label>
+        </div>
+        
+        <div class="upload-section" id="uploadSection" role="button" aria-label="Upload patient report file" tabindex="0">
             <div class="upload-icon" aria-hidden="true">➕</div>
-            <div class="upload-text">Upload Patient Report</div>
-            <div class="upload-subtext">Click to select a CSV file or drag and drop</div>
+            <div class="upload-text" id="uploadText">Upload Patient Report</div>
+            <div class="upload-subtext" id="uploadSubtext">Click to select a CSV file or drag and drop</div>
             <input type="file" id="fileInput" accept=".csv" aria-label="File input for patient report">
             <div class="selected-file" id="selectedFile" style="display: none;"></div>
             <button class="btn" id="uploadBtn" style="display: none;">Analyze Report</button>
@@ -282,8 +294,39 @@
         const error = document.getElementById('error');
         const results = document.getElementById('results');
         const resultsContainer = document.getElementById('resultsContainer');
+        const csvRadio = document.getElementById('csvRadio');
+        const pdfRadio = document.getElementById('pdfRadio');
+        const uploadText = document.getElementById('uploadText');
+        const uploadSubtext = document.getElementById('uploadSubtext');
         
         let currentFile = null;
+        let currentFileType = 'csv';
+        
+        // File type radio button handlers
+        csvRadio.addEventListener('change', () => {
+            currentFileType = 'csv';
+            fileInput.accept = '.csv';
+            uploadText.textContent = 'Upload Patient Report (CSV)';
+            uploadSubtext.textContent = 'Click to select a CSV file or drag and drop';
+            resetFileSelection();
+        });
+        
+        pdfRadio.addEventListener('change', () => {
+            currentFileType = 'pdf';
+            fileInput.accept = '.pdf';
+            uploadText.textContent = 'Upload Blood Report (PDF)';
+            uploadSubtext.textContent = 'Click to select a PDF file or drag and drop';
+            resetFileSelection();
+        });
+        
+        function resetFileSelection() {
+            currentFile = null;
+            selectedFile.style.display = 'none';
+            uploadBtn.style.display = 'none';
+            fileInput.value = '';
+            results.classList.remove('show');
+            error.classList.remove('show');
+        }
         
         // Click to upload
         uploadSection.addEventListener('click', (e) => {
@@ -333,9 +376,14 @@
                 return;
             }
             
-            // Validate file type
-            if (!currentFile.name.endsWith('.csv')) {
+            // Validate file type based on current selection
+            if (currentFileType === 'csv' && !currentFile.name.endsWith('.csv')) {
                 showError('Please upload a CSV file');
+                return;
+            }
+            
+            if (currentFileType === 'pdf' && !currentFile.name.endsWith('.pdf')) {
+                showError('Please upload a PDF file');
                 return;
             }
             
@@ -350,8 +398,17 @@
             formData.append('file', currentFile);
             
             try {
+                // Determine endpoint based on file type
+                let endpoint = '/predict';
+                let apiUrl = endpoint;
+                
+                if (currentFileType === 'pdf') {
+                    // Use FastAPI endpoint for PDF
+                    apiUrl = 'http://localhost:8000/predict';
+                }
+                
                 // Send request
-                const response = await fetch('/predict', {
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     body: formData
                 });
@@ -359,11 +416,15 @@
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Prediction failed');
+                    throw new Error(data.error || data.detail || 'Prediction failed');
                 }
                 
-                // Display results
-                displayResults(data.predictions);
+                // Display results based on file type
+                if (currentFileType === 'pdf') {
+                    displayPDFResults(data);
+                } else {
+                    displayResults(data.predictions);
+                }
                 
             } catch (err) {
                 showError(err.message);
@@ -372,6 +433,47 @@
                 uploadBtn.disabled = false;
             }
         });
+        
+        function displayPDFResults(data) {
+            resultsContainer.innerHTML = '';
+            
+            const card = document.createElement('div');
+            card.className = 'result-card';
+            
+            const isHighRisk = data.prediction === 'HIGH RISK' || data.prediction.includes('HIGH');
+            const predictionClass = isHighRisk ? 'prediction-yes' : 'prediction-no';
+            const predictionText = data.prediction_label || data.prediction;
+            
+            card.innerHTML = `
+                <div class="result-header">
+                    <div class="patient-id">PDF Report Analysis</div>
+                    <div class="prediction-badge ${predictionClass}">
+                        ${predictionText}
+                    </div>
+                </div>
+                <div class="confidence">
+                    <strong>Confidence Score:</strong> ${data.probability_percentage}%
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${data.probability_percentage}%"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                    <strong>Extracted Values:</strong>
+                    <div style="font-size: 14px; color: #666; margin-top: 5px;">
+                        ${Object.entries(data.extracted_values || {})
+                            .filter(([k, v]) => v !== null)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(', ') || 'Using defaults'}
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; font-size: 12px; color: #856404;">
+                    ${data.disclaimer || '⚠️ Research demonstration only - NOT a medical device'}
+                </div>
+            `;
+            
+            resultsContainer.appendChild(card);
+            results.classList.add('show');
+        }
         
         function displayResults(predictions) {
             resultsContainer.innerHTML = '';
