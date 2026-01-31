@@ -96,7 +96,15 @@ def recreate_global_model_from_history(
     """
     Recreate the global model from training history by simulating the final round.
     
-    Since we don't save model weights, we simulate the training to get the final model.
+    IMPORTANT LIMITATION: Since model weights are not saved during training,
+    this function re-simulates the entire federated training process to recreate
+    the model. This means:
+    1. The recreated model should match the original if conditions are identical
+    2. Training must be deterministic (same seed, same data splits)
+    3. Non-deterministic factors (GPU parallelism, etc.) may cause slight variations
+    
+    For production use, consider modifying run_federated_experiments.py to save
+    model weights after training using model.save_weights() or model.save().
     
     Args:
         history: Training history dictionary
@@ -205,14 +213,12 @@ def compute_standard_metrics(
     y_pred = (y_pred_proba > 0.5).astype(int).flatten()
     y_test_flat = y_test.flatten()
     
-    # Compute metrics
-    # Use average='binary' for binary classification
-    # For class imbalance, also compute metrics for each class
+    # Compute metrics with explicit average='binary' for binary classification
     metrics = {
         'accuracy': accuracy_score(y_test_flat, y_pred),
-        'precision': precision_score(y_test_flat, y_pred, zero_division=0),
-        'recall': recall_score(y_test_flat, y_pred, zero_division=0),
-        'f1_score': f1_score(y_test_flat, y_pred, zero_division=0),
+        'precision': precision_score(y_test_flat, y_pred, average='binary', zero_division=0),
+        'recall': recall_score(y_test_flat, y_pred, average='binary', zero_division=0),
+        'f1_score': f1_score(y_test_flat, y_pred, average='binary', zero_division=0),
         'cross_entropy_loss': log_loss(y_test_flat, y_pred_proba)
     }
     
@@ -424,8 +430,8 @@ def generate_evaluation_report(
     lines.append("```")
     lines.append(f"                 Predicted")
     lines.append(f"              Survived  Death")
-    lines.append(f"Actual Survived   {confusion_mat[0,0]:4d}    {confusion_mat[0,1]:4d}")
-    lines.append(f"       Death      {confusion_mat[1,0]:4d}    {confusion_mat[1,1]:4d}")
+    lines.append(f"Actual Survived   {confusion_mat[0,0]:>4d}    {confusion_mat[0,1]:>4d}")
+    lines.append(f"       Death      {confusion_mat[1,0]:>4d}    {confusion_mat[1,1]:>4d}")
     lines.append("```")
     lines.append("")
     lines.append("See `confusion_matrix.png` for visualization.\n")
@@ -456,15 +462,28 @@ def generate_evaluation_report(
         lines.append("- ✗ High variance indicates significant performance disparity")
     lines.append("")
     
-    # Training Progress
-    lines.append("## Training Progress Summary\n")
-    if 'rounds' in history and len(history['rounds']) > 0:
-        rounds = history['rounds']
-        lines.append(f"- **Initial Training Accuracy:** {rounds[0].get('global_accuracy', 'N/A'):.4f}")
-        lines.append(f"- **Final Training Accuracy:** {rounds[-1].get('global_accuracy', 'N/A'):.4f}")
-        lines.append(f"- **Initial Training Loss:** {rounds[0].get('global_loss', 'N/A'):.4f}")
-        lines.append(f"- **Final Training Loss:** {rounds[-1].get('global_loss', 'N/A'):.4f}")
-        lines.append("")
+    # Training Summary Statistics
+    lines.append("## Training Summary\n")
+    
+    if hasattr(history, 'metrics_distributed_fit') and history.metrics_distributed_fit:
+        train_loss = history.metrics_distributed_fit.get('train_loss', [])
+        train_accuracy = history.metrics_distributed_fit.get('train_accuracy', [])
+        
+        if train_loss:
+            losses = [loss[1] for loss in train_loss]
+            lines.append(f"- **Initial Loss:** {losses[0]:.4f}")
+            lines.append(f"- **Final Loss:** {losses[-1]:.4f}")
+            lines.append(f"- **Loss Reduction:** {losses[0] - losses[-1]:.4f}")
+            lines.append(f"- **Average Loss:** {np.mean(losses):.4f}")
+            lines.append("")
+        
+        if train_accuracy:
+            accuracies = [acc[1] for acc in train_accuracy]
+            lines.append(f"- **Initial Accuracy:** {accuracies[0]:.4f}")
+            lines.append(f"- **Final Accuracy:** {accuracies[-1]:.4f}")
+            lines.append(f"- **Accuracy Improvement:** {accuracies[-1] - accuracies[0]:.4f}")
+            lines.append(f"- **Average Accuracy:** {np.mean(accuracies):.4f}")
+            lines.append("")
     
     # Strategy Comparison (if available)
     if comparison_metrics:

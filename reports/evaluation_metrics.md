@@ -1,6 +1,6 @@
 # Federated Model Evaluation Report
 
-**Generated:** 2026-01-31 04:54:29
+**Generated:** 2026-01-31 04:58:17
 
 ---
 
@@ -17,30 +17,27 @@
 
 ### Classification Performance
 
-- **Accuracy:** 0.9333 (93.33%)
-- **Precision (Death class):** 0.0000
-- **Recall (Death class):** 0.0000
-- **F1-Score (Death class):** 0.0000
-- **Precision (Weighted):** 0.9017
-- **Recall (Weighted):** 0.9333
-- **F1-Score (Weighted):** 0.9172
-- **Cross-Entropy Loss:** 0.5878
+- **Accuracy:** 0.9000 (90.00%)
+- **Precision (Death class):** 0.2000
+- **Recall (Death class):** 0.3333
+- **F1-Score (Death class):** 0.2500
+- **Precision (Weighted):** 0.9255
+- **Recall (Weighted):** 0.9000
+- **F1-Score (Weighted):** 0.9116
+- **Cross-Entropy Loss:** 0.6148
 
 ### Data Distribution
 
 - **Test Set Distribution:** Survived=57, Death=3
-- **Predicted Distribution:** Survived=59, Death=1
-
-⚠️ **Note:** The model shows class imbalance issues. It's predicting predominantly one class.
-This is common in medical datasets where one outcome is more frequent than the other.
+- **Predicted Distribution:** Survived=55, Death=5
 
 ### Confusion Matrix
 
 ```
                  Predicted
               Survived  Death
-Actual Survived     56       1
-       Death         3       0
+Actual Survived     53       4
+       Death         2       1
 ```
 
 See `confusion_matrix.png` for visualization.
@@ -51,33 +48,28 @@ See `confusion_matrix.png` for visualization.
 
 | Client ID | Accuracy | Samples |
 |-----------|----------|---------|
-| hospital_0 | 0.7568 | 74 |
-| hospital_1 | 0.7692 | 65 |
-| hospital_2 | 0.7797 | 59 |
-| hospital_3 | 0.7692 | 39 |
-| hospital_4 | 0.8226 | 62 |
+| hospital_0 | 0.7703 | 74 |
+| hospital_1 | 0.7846 | 65 |
+| hospital_2 | 0.7119 | 59 |
+| hospital_3 | 0.5897 | 39 |
+| hospital_4 | 0.8387 | 62 |
 
 ### Fairness Metrics (Accuracy Variance)
 
-- **Mean Client Accuracy:** 0.7795
-- **Standard Deviation:** 0.0227
-- **Minimum Client Accuracy:** 0.7568
-- **Maximum Client Accuracy:** 0.8226
-- **Accuracy Variance:** 0.0005
+- **Mean Client Accuracy:** 0.7390
+- **Standard Deviation:** 0.0849
+- **Minimum Client Accuracy:** 0.5897
+- **Maximum Client Accuracy:** 0.8387
+- **Accuracy Variance:** 0.0072
 
 **Fairness Interpretation:**
-- ✓ Low variance indicates fair performance across clients
+- ~ Moderate variance indicates some performance disparity
 
-## Training Progress Summary
-
-- **Initial Training Accuracy:** 0.6639
-- **Final Training Accuracy:** 0.7689
-- **Initial Training Loss:** 0.6617
-- **Final Training Loss:** 0.6143
+## Training Summary
 
 ## Conclusions
 
-1. **Overall Performance:** The federated model achieved 93.33% accuracy on test data.
-2. **Model Quality:** Weighted F1-score of 0.9172 indicates good overall performance accounting for class imbalance.
-3. **Fairness:** Accuracy variance of 0.0005 across clients suggests equitable performance distribution.
-4. **Client Consistency:** Standard deviation of 0.0227 across clients indicates high consistency in model performance across different hospital datasets.
+1. **Overall Performance:** The federated model achieved 90.00% accuracy on test data.
+2. **Model Quality:** Weighted F1-score of 0.9116 indicates good overall performance accounting for class imbalance.
+3. **Fairness:** Accuracy variance of 0.0072 across clients suggests equitable performance distribution.
+4. **Client Consistency:** Standard deviation of 0.0849 across clients indicates moderate consistency in model performance across different hospital datasets.
