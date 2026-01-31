@@ -755,4 +755,193 @@ For production deployments, consider additional security measures such as:
 - Secure aggregation protocols
 - Encrypted communication channels
 - Access control and authentication
+
+## Model Evaluation
+
+The repository includes a comprehensive evaluation script for trained federated learning models, supporting both single model evaluation and strategy comparison (FedAvg vs FedProx).
+
+### Features
+
+- **Standard Metrics**: Accuracy, precision, recall, F1-score
+- **Cross-Entropy Loss**: Model confidence evaluation
+- **Confusion Matrix**: Visual representation of classification performance
+- **Client-Level Metrics**: Per-client accuracy for fairness analysis
+- **Fairness Metrics**: Accuracy variance across clients
+- **Strategy Comparison**: Compare FedAvg vs FedProx performance
+- **Comprehensive Reports**: Markdown reports and visualizations
+
+### Usage
+
+#### Basic Evaluation
+
+Evaluate a trained model using existing training history:
+
+```bash
+# Evaluate the model from training history
+python evaluate_federated_model.py \
+    --data-path data/heart_failure.csv \
+    --history-path logs/training_history.json \
+    --output-dir reports
+```
+
+#### Compare FedAvg vs FedProx
+
+To compare two strategies, first train both models:
+
+```bash
+# Train with FedAvg
+python run_federated_experiments.py \
+    --strategy fedavg \
+    --num-rounds 10 \
+    --output-dir logs
+
+# Rename output for comparison
+mv logs/training_history.json logs/training_history_fedavg.json
+
+# Train with FedProx
+python run_federated_experiments.py \
+    --strategy fedprox \
+    --proximal-mu 0.1 \
+    --num-rounds 10 \
+    --output-dir logs
+
+# Rename output for comparison
+mv logs/training_history.json logs/training_history_fedprox.json
+
+# Compare strategies
+python evaluate_federated_model.py \
+    --compare-strategies \
+    --fedavg-history logs/training_history_fedavg.json \
+    --fedprox-history logs/training_history_fedprox.json \
+    --output-dir reports
+```
+
+### Evaluation Outputs
+
+The evaluation script generates:
+
+1. **`reports/evaluation_metrics.md`**: Comprehensive evaluation report including:
+   - Experiment configuration
+   - Standard classification metrics (accuracy, precision, recall, F1-score)
+   - Weighted metrics for class imbalance handling
+   - Class distribution analysis
+   - Confusion matrix in text format
+   - Client-level performance breakdown
+   - Fairness metrics and interpretation
+   - Training progress summary
+   - Overall conclusions
+
+2. **`reports/confusion_matrix.png`**: Visual confusion matrix showing:
+   - True positives, true negatives, false positives, false negatives
+   - Color-coded heatmap for easy interpretation
+
+3. **`reports/evaluation_comparison.md`** (when comparing strategies):
+   - Side-by-side comparison of FedAvg vs FedProx
+   - Performance metrics for each strategy
+   - Fairness comparison
+   - Winner determination for each metric
+
+### Understanding the Metrics
+
+#### Standard Metrics
+- **Accuracy**: Overall correctness of predictions
+- **Precision**: Proportion of positive predictions that are correct
+- **Recall**: Proportion of actual positives that are identified
+- **F1-Score**: Harmonic mean of precision and recall
+- **Cross-Entropy Loss**: Measure of prediction confidence
+
+#### Weighted Metrics
+For datasets with class imbalance (like medical data), weighted metrics provide a more accurate assessment by accounting for the support (number of samples) of each class.
+
+#### Fairness Metrics
+- **Mean Client Accuracy**: Average accuracy across all clients
+- **Standard Deviation**: Measure of consistency across clients
+- **Accuracy Variance**: Quantifies performance disparity
+- **Min/Max Client Accuracy**: Range of performance
+
+**Interpretation**:
+- Low variance (<0.01): Fair and equitable performance
+- Moderate variance (0.01-0.05): Some performance disparity
+- High variance (>0.05): Significant performance disparity
+
+### Advanced Usage
+
+#### Custom Parameters
+
+```bash
+python evaluate_federated_model.py \
+    --data-path data/heart_failure.csv \
+    --history-path logs/training_history.json \
+    --output-dir custom_reports \
+    --num-clients 5 \
+    --random-seed 42
+```
+
+#### Programmatic Usage
+
+```python
+from evaluate_federated_model import evaluate_federated_model
+
+# Run evaluation programmatically
+evaluate_federated_model(
+    data_path="data/heart_failure.csv",
+    history_path="logs/training_history.json",
+    output_dir="reports",
+    num_clients=5,
+    random_seed=42
+)
+```
+
+### Important Notes
+
+1. **No Retraining**: The evaluation script does NOT retrain the model. It recreates the trained model by simulating the federated training process.
+
+2. **Preprocessing Consistency**: Uses the same preprocessing pipeline as training to ensure consistent evaluation.
+
+3. **Class Imbalance**: Medical datasets often have class imbalance. The script provides both standard and weighted metrics for comprehensive assessment.
+
+4. **Privacy Preservation**: Evaluation maintains privacy guarantees - only aggregated metrics are reported, no patient-level data is exposed.
+
+### Example Output
+
+After running evaluation, you'll see:
+
+```
+================================================================================
+EVALUATION COMPLETED SUCCESSFULLY
+Results saved to:
+  - reports/evaluation_metrics.md
+  - reports/confusion_matrix.png
+================================================================================
+```
+
+The evaluation report provides actionable insights:
+- Overall model performance on held-out test data
+- Model quality assessment accounting for class imbalance
+- Fairness analysis across different hospital clients
+- Consistency of model performance across diverse datasets
+
+## Complete Workflow
+
+### End-to-End Federated Learning Pipeline
+
+1. **Validate Dataset**
+   ```bash
+   python validate_dataset.py
+   ```
+
+2. **Run Federated Training**
+   ```bash
+   python run_federated_experiments.py --num-rounds 10 --strategy fedavg
+   ```
+
+3. **Evaluate Model**
+   ```bash
+   python evaluate_federated_model.py
+   ```
+
+4. **Review Results**
+   - Check `logs/training_summary.md` for training progress
+   - Check `reports/evaluation_metrics.md` for comprehensive evaluation
+   - View `reports/confusion_matrix.png` for visual performance analysis
 - Regular privacy audits
