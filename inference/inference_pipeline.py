@@ -207,10 +207,10 @@ class InferencePipeline:
                 # Try loading with standard pickle method (legacy)
                 self.preprocessor = HeartFailurePreprocessor.load(preprocessor_path)
                 logger.info("✓ Preprocessor loaded successfully (pickle format)")
-            except ImportError as e:
-                # Handle NumPy version incompatibility with clear error
-                logger.error("Failed to load preprocessor due to NumPy version incompatibility")
-                logger.error(str(e))
+            except ImportError:
+                # Handle NumPy version incompatibility or other import errors
+                # The HeartFailurePreprocessor.load() method provides detailed error messages
+                logger.error("Failed to load preprocessor due to import error (possibly NumPy incompatibility)")
                 raise
             except Exception as e:
                 # Try safe loading as fallback

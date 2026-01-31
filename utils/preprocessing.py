@@ -71,10 +71,14 @@ class HeartFailurePreprocessor:
         Returns:
             Tuple of (json_path, base_path) for consistent file naming
         """
-        # Ensure .json extension
-        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
-        # Remove .json extension to get base path (use splitext for robustness)
-        base_path = os.path.splitext(json_path)[0]
+        # Ensure .json extension (use splitext for robustness with arbitrary inputs)
+        base_without_ext, current_ext = os.path.splitext(filepath)
+        if current_ext != '.json':
+            json_path = filepath + '.json'
+            base_path = filepath
+        else:
+            json_path = filepath
+            base_path = base_without_ext
         return json_path, base_path
     
     def fit(self, data: Union[pd.DataFrame, np.ndarray]) -> 'HeartFailurePreprocessor':
