@@ -1,0 +1,33 @@
+{
+  "experiment_config": {
+    "num_clients": 5,
+    "num_rounds": 2,
+    "strategy": "fedprox",
+    "use_dp": false,
+    "dp_epsilon": null,
+    "dp_delta": null,
+    "dp_l2_norm_clip": null,
+    "proximal_mu": 0.1,
+    "data_path": "data/heart_failure.csv",
+    "random_seed": 42,
+    "model": "LSTM (PRIMARY)",
+    "data_partitioning": "Non-IID"
+  },
+  "timestamp": "2026-01-31T04:33:21.496498",
+  "rounds": [
+    {
+      "round": 1,
+      "global_loss": 0.6924281616170866,
+      "global_accuracy": 0.5294117658328609,
+      "participating_clients": 5,
+      "total_samples": 238
+    },
+    {
+      "round": 2,
+      "global_loss": 0.6823827128450409,
+      "global_accuracy": 0.5588235262812686,
+      "participating_clients": 5,
+      "total_samples": 238
+    }
+  ]
+}
