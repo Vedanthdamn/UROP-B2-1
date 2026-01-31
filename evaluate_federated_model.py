@@ -206,6 +206,8 @@ def compute_standard_metrics(
     y_test_flat = y_test.flatten()
     
     # Compute metrics
+    # Use average='binary' for binary classification
+    # For class imbalance, also compute metrics for each class
     metrics = {
         'accuracy': accuracy_score(y_test_flat, y_pred),
         'precision': precision_score(y_test_flat, y_pred, zero_division=0),
@@ -213,6 +215,17 @@ def compute_standard_metrics(
         'f1_score': f1_score(y_test_flat, y_pred, zero_division=0),
         'cross_entropy_loss': log_loss(y_test_flat, y_pred_proba)
     }
+    
+    # Add weighted metrics for better handling of class imbalance
+    metrics['precision_weighted'] = precision_score(y_test_flat, y_pred, average='weighted', zero_division=0)
+    metrics['recall_weighted'] = recall_score(y_test_flat, y_pred, average='weighted', zero_division=0)
+    metrics['f1_weighted'] = f1_score(y_test_flat, y_pred, average='weighted', zero_division=0)
+    
+    # Add class distribution info
+    unique, counts = np.unique(y_test_flat, return_counts=True)
+    metrics['test_class_distribution'] = dict(zip(unique.tolist(), counts.tolist()))
+    unique_pred, counts_pred = np.unique(y_pred, return_counts=True)
+    metrics['predicted_class_distribution'] = dict(zip(unique_pred.tolist(), counts_pred.tolist()))
     
     logger.info(f"Standard metrics computed: accuracy={metrics['accuracy']:.4f}")
     return metrics
@@ -383,10 +396,27 @@ def generate_evaluation_report(
     lines.append("## Standard Evaluation Metrics\n")
     lines.append("### Classification Performance\n")
     lines.append(f"- **Accuracy:** {standard_metrics['accuracy']:.4f} ({standard_metrics['accuracy']*100:.2f}%)")
-    lines.append(f"- **Precision:** {standard_metrics['precision']:.4f}")
-    lines.append(f"- **Recall:** {standard_metrics['recall']:.4f}")
-    lines.append(f"- **F1-Score:** {standard_metrics['f1_score']:.4f}")
+    lines.append(f"- **Precision (Death class):** {standard_metrics['precision']:.4f}")
+    lines.append(f"- **Recall (Death class):** {standard_metrics['recall']:.4f}")
+    lines.append(f"- **F1-Score (Death class):** {standard_metrics['f1_score']:.4f}")
+    lines.append(f"- **Precision (Weighted):** {standard_metrics['precision_weighted']:.4f}")
+    lines.append(f"- **Recall (Weighted):** {standard_metrics['recall_weighted']:.4f}")
+    lines.append(f"- **F1-Score (Weighted):** {standard_metrics['f1_weighted']:.4f}")
     lines.append(f"- **Cross-Entropy Loss:** {standard_metrics['cross_entropy_loss']:.4f}")
+    lines.append("")
+    
+    # Class distribution
+    lines.append("### Data Distribution\n")
+    test_dist = standard_metrics.get('test_class_distribution', {})
+    pred_dist = standard_metrics.get('predicted_class_distribution', {})
+    lines.append(f"- **Test Set Distribution:** Survived={test_dist.get(0, 0)}, Death={test_dist.get(1, 0)}")
+    lines.append(f"- **Predicted Distribution:** Survived={pred_dist.get(0, 0)}, Death={pred_dist.get(1, 0)}")
+    
+    # Class imbalance warning
+    if standard_metrics['precision'] == 0 or standard_metrics['recall'] == 0:
+        lines.append("")
+        lines.append("⚠️ **Note:** The model shows class imbalance issues. It's predicting predominantly one class.")
+        lines.append("This is common in medical datasets where one outcome is more frequent than the other.")
     lines.append("")
     
     # Confusion Matrix
@@ -463,8 +493,9 @@ def generate_evaluation_report(
     # Conclusions
     lines.append("## Conclusions\n")
     lines.append(f"1. **Overall Performance:** The federated model achieved {standard_metrics['accuracy']*100:.2f}% accuracy on test data.")
-    lines.append(f"2. **Model Quality:** F1-score of {standard_metrics['f1_score']:.4f} indicates {'good' if standard_metrics['f1_score'] > 0.7 else 'moderate'} balance between precision and recall.")
+    lines.append(f"2. **Model Quality:** Weighted F1-score of {standard_metrics['f1_weighted']:.4f} indicates {'good' if standard_metrics['f1_weighted'] > 0.7 else 'moderate'} overall performance accounting for class imbalance.")
     lines.append(f"3. **Fairness:** Accuracy variance of {client_metrics['accuracy_variance']:.4f} across clients suggests {'equitable' if client_metrics['accuracy_variance'] < 0.01 else 'some disparity in'} performance distribution.")
+    lines.append(f"4. **Client Consistency:** Standard deviation of {client_metrics['std_client_accuracy']:.4f} across clients indicates {'high' if client_metrics['std_client_accuracy'] < 0.05 else 'moderate'} consistency in model performance across different hospital datasets.")
     lines.append("")
     
     # Save report
