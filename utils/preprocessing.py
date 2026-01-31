@@ -59,6 +59,23 @@ class HeartFailurePreprocessor:
         self.feature_columns = None
         self.is_fitted = False
     
+    @staticmethod
+    def _get_safe_paths(filepath: str) -> tuple:
+        """
+        Get consistent file paths for safe serialization.
+        
+        Args:
+            filepath: Base filepath (with or without .json extension)
+        
+        Returns:
+            Tuple of (json_path, base_path) for consistent file naming
+        """
+        # Ensure .json extension
+        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
+        # Remove .json extension to get base path (handle multiple .json occurrences)
+        base_path = json_path[:-5] if json_path.endswith('.json') else json_path
+        return json_path, base_path
+    
     def fit(self, data: Union[pd.DataFrame, np.ndarray]) -> 'HeartFailurePreprocessor':
         """
         Fit the preprocessor on training data.
@@ -382,21 +399,6 @@ class HeartFailurePreprocessor:
                    f"n_features={len(self.feature_columns)}, fitted=True)")
         else:
             return f"HeartFailurePreprocessor(target='{self.target_column}', fitted=False)"
-    
-    @staticmethod
-    def _get_safe_paths(filepath: str) -> tuple:
-        """
-        Get consistent file paths for safe serialization.
-        
-        Args:
-            filepath: Base filepath (with or without .json extension)
-        
-        Returns:
-            Tuple of (json_path, base_path) for consistent file naming
-        """
-        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
-        base_path = json_path.replace('.json', '')
-        return json_path, base_path
 
 
 def create_preprocessing_pipeline(target_column: str = 'DEATH_EVENT') -> HeartFailurePreprocessor:
