@@ -322,6 +322,154 @@ Run the demo script to see federated learning in action:
 python demo_federated_client.py
 ```
 
+## Federated Server
+
+The repository now includes a Flower federated server for coordinating privacy-preserving training across multiple hospitals.
+
+### Features
+
+- **Global Model Management**: Initializes and distributes TensorFlow LSTM model
+- **Aggregation Strategies**: Supports FedAvg (primary) and FedProx (comparative)
+- **Metrics Tracking**: Logs per-round loss, accuracy, and participating clients
+- **Privacy-Preserving**: Server never accesses raw patient data
+- **DP-Aware**: Treats all client updates as DP-protected
+- **Simulation Mode**: Built-in support for testing and development
+
+### Usage
+
+#### Running a Federated Training Session
+
+Basic usage with FedAvg (default):
+
+```bash
+python demo_federated_training.py --num-clients 5 --num-rounds 10
+```
+
+With FedProx strategy:
+
+```bash
+python demo_federated_training.py --strategy fedprox --proximal-mu 0.1
+```
+
+With differential privacy:
+
+```bash
+python demo_federated_training.py --use-dp --dp-epsilon 1.0 --dp-delta 1e-5
+```
+
+Custom configuration:
+
+```bash
+python demo_federated_training.py \
+  --num-clients 5 \
+  --num-rounds 10 \
+  --strategy fedavg \
+  --use-dp \
+  --dp-epsilon 1.0 \
+  --dp-l2-norm-clip 1.0
+```
+
+#### Programmatic Usage
+
+```python
+from federated import create_federated_server, start_server_simulation
+from federated import create_flower_client, create_dp_config
+from utils.client_partitioning import partition_for_federated_clients
+from utils.preprocessing import create_preprocessing_pipeline
+import pandas as pd
+
+# Partition data for federated clients
+client_datasets = partition_for_federated_clients(
+    data_path='data/heart_failure.csv',
+    n_clients=5,
+    random_seed=42
+)
+
+# Create and fit preprocessing pipeline
+data = pd.read_csv('data/heart_failure.csv')
+preprocessor = create_preprocessing_pipeline()
+preprocessor.fit(data)
+
+# Optional: Create DP configuration
+dp_config = create_dp_config(
+    epsilon=1.0,
+    delta=1e-5,
+    l2_norm_clip=1.0,
+    enabled=True
+)
+
+# Define client factory function
+def client_fn(cid: str):
+    client_id = int(cid)
+    return create_flower_client(
+        client_data=client_datasets[client_id],
+        preprocessor=preprocessor,
+        client_id=f"hospital_{client_id}",
+        dp_config=dp_config  # Optional
+    )
+
+# Run federated training simulation
+history = start_server_simulation(
+    client_fn=client_fn,
+    num_clients=5,
+    strategy="fedavg",  # or "fedprox"
+    num_rounds=10
+)
+```
+
+### Aggregation Strategies
+
+#### FedAvg (Federated Averaging)
+
+The primary aggregation strategy that computes weighted averages of client model updates:
+
+```python
+from federated import create_federated_server
+
+server = create_federated_server(
+    strategy="fedavg",
+    num_rounds=10,
+    min_clients=3
+)
+```
+
+#### FedProx (Federated Proximal)
+
+An alternative strategy that adds a proximal term to improve convergence with non-IID data:
+
+```python
+server = create_federated_server(
+    strategy="fedprox",
+    num_rounds=10,
+    min_clients=3,
+    proximal_mu=0.1  # Proximal term coefficient
+)
+```
+
+### Metrics Tracking
+
+The server tracks and logs the following metrics per round:
+
+- **Global Loss**: Weighted average of client training losses
+- **Global Accuracy**: Weighted average of client training accuracies
+- **Number of Participating Clients**: Clients that completed training
+- **Total Samples**: Sum of samples across all clients
+- **DP Status**: Whether differential privacy is enabled
+
+### Testing
+
+Run the test suite to validate server functionality:
+
+```bash
+python test_federated_server.py
+```
+
+Run the demo script to see federated training in action:
+
+```bash
+python demo_federated_training.py
+```
+
 ## Project Structure
 
 ```
@@ -342,6 +490,7 @@ UROP-B2-1/
 ├── federated/
 │   ├── __init__.py                 # Federated learning module initialization
 │   ├── client.py                   # Flower federated client implementation
+│   ├── server.py                   # Flower federated server implementation
 │   └── differential_privacy.py     # Differential privacy implementation
 ├── reports/
 │   ├── data_profile.md             # Dataset profiling report
@@ -353,12 +502,14 @@ UROP-B2-1/
 ├── test_models.py                  # Model architectures test suite
 ├── test_client_partitioning.py     # Client partitioning test suite
 ├── test_federated_client.py        # Federated client test suite
+├── test_federated_server.py        # Federated server test suite
 ├── test_differential_privacy.py    # Differential privacy test suite
 ├── demo_preprocessing.py           # Preprocessing usage demonstration
 ├── demo_sampling.py                # Dataset sampling usage demonstration
 ├── demo_models.py                  # Model architectures demonstration
 ├── demo_client_partitioning.py     # Client partitioning demonstration
 ├── demo_federated_client.py        # Federated client demonstration
+├── demo_federated_training.py      # Full federated training session demonstration
 ├── demo_differential_privacy.py    # Differential privacy demonstration
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
