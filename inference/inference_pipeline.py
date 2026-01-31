@@ -191,18 +191,44 @@ class InferencePipeline:
                 
         Raises:
             FileNotFoundError: If preprocessor file not found
+            ImportError: If NumPy version incompatibility detected
         """
         if preprocessor_path and os.path.exists(preprocessor_path):
             logger.info(f"Loading preprocessor from {preprocessor_path}...")
-            self.preprocessor = HeartFailurePreprocessor.load(preprocessor_path)
+            
+            try:
+                # Try loading with standard pickle method (legacy)
+                self.preprocessor = HeartFailurePreprocessor.load(preprocessor_path)
+                logger.info("✓ Preprocessor loaded successfully (pickle format)")
+            except ImportError as e:
+                # Handle NumPy version incompatibility with clear error
+                logger.error("Failed to load preprocessor due to NumPy version incompatibility")
+                logger.error(str(e))
+                raise
+            except Exception as e:
+                # Try safe loading as fallback
+                logger.warning(f"Standard loading failed: {e}")
+                logger.info("Attempting to load using safe format...")
+                try:
+                    # Convert .pkl path to .json path for safe loading
+                    safe_path = preprocessor_path.replace('.pkl', '')
+                    self.preprocessor = HeartFailurePreprocessor.load_safe(safe_path)
+                    logger.info("✓ Preprocessor loaded successfully (safe format)")
+                except Exception as safe_error:
+                    logger.error(f"Safe loading also failed: {safe_error}")
+                    logger.info("Creating new preprocessor from training data...")
+                    # Fall back to creating new preprocessor
+                    data = pd.read_csv('data/heart_failure.csv')
+                    self.preprocessor = create_preprocessing_pipeline()
+                    self.preprocessor.fit(data)
+                    logger.info("✓ New preprocessor created and fitted")
         else:
             # Create and fit new preprocessor
             logger.info("Creating new preprocessor...")
             data = pd.read_csv('data/heart_failure.csv')
             self.preprocessor = create_preprocessing_pipeline()
             self.preprocessor.fit(data)
-            
-        logger.info("Preprocessor loaded successfully!")
+            logger.info("✓ Preprocessor created and fitted successfully")
         
     def predict(
         self,
