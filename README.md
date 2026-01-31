@@ -341,7 +341,8 @@ UROP-B2-1/
 │   └── README.md                   # Model documentation
 ├── federated/
 │   ├── __init__.py                 # Federated learning module initialization
-│   └── client.py                   # Flower federated client implementation
+│   ├── client.py                   # Flower federated client implementation
+│   └── differential_privacy.py     # Differential privacy implementation
 ├── reports/
 │   ├── data_profile.md             # Dataset profiling report
 │   ├── sampling_summary.md         # Sampling operation report
@@ -352,15 +353,18 @@ UROP-B2-1/
 ├── test_models.py                  # Model architectures test suite
 ├── test_client_partitioning.py     # Client partitioning test suite
 ├── test_federated_client.py        # Federated client test suite
+├── test_differential_privacy.py    # Differential privacy test suite
 ├── demo_preprocessing.py           # Preprocessing usage demonstration
 ├── demo_sampling.py                # Dataset sampling usage demonstration
 ├── demo_models.py                  # Model architectures demonstration
 ├── demo_client_partitioning.py     # Client partitioning demonstration
 ├── demo_federated_client.py        # Federated client demonstration
+├── demo_differential_privacy.py    # Differential privacy demonstration
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
 ```
+
 
 ## Notes
 
@@ -378,9 +382,109 @@ This repository implements privacy-preserving federated learning with the follow
 - **No Patient Logging**: Patient-level data is never logged, only aggregated metrics
 - **Secure Training**: Local training on each hospital's own data
 - **Non-IID Support**: Handles realistic non-IID data distributions across hospitals
+- **Differential Privacy**: Optional (ε, δ)-DP protection for model updates
+
+### Differential Privacy
+
+The repository now supports differential privacy (DP) for federated learning, providing formal privacy guarantees for model updates:
+
+#### Features
+
+- **Gradient Clipping**: Bounds the sensitivity of model updates via L2 norm clipping
+- **Gaussian Noise Addition**: Adds calibrated noise to provide (ε, δ)-differential privacy
+- **Configurable Privacy Budget**: Tune epsilon and delta parameters to balance privacy and utility
+- **Privacy Budget Tracking**: Logs all DP parameters for audit and compliance
+- **Loss Monitoring**: Tracks training loss before and after DP application
+
+#### Usage
+
+```python
+from federated import create_flower_client, create_dp_config
+from utils.preprocessing import create_preprocessing_pipeline
+from utils.client_partitioning import partition_for_federated_clients
+import pandas as pd
+
+# Partition data for federated clients
+client_datasets = partition_for_federated_clients(
+    data_path='data/heart_failure.csv',
+    n_clients=5,
+    random_seed=42
+)
+
+# Create and fit preprocessor
+data = pd.read_csv('data/heart_failure.csv')
+preprocessor = create_preprocessing_pipeline()
+preprocessor.fit(data)
+
+# Create DP configuration
+dp_config = create_dp_config(
+    epsilon=1.0,      # Privacy budget (lower = stronger privacy)
+    delta=1e-5,       # Privacy budget (should be < 1/n_samples)
+    l2_norm_clip=1.0, # Maximum L2 norm for gradient clipping
+    enabled=True
+)
+
+# Create Flower client with DP
+client = create_flower_client(
+    client_data=client_datasets[0],
+    preprocessor=preprocessor,
+    val_split=0.2,
+    epochs_per_round=5,
+    batch_size=32,
+    client_id="hospital_0",
+    dp_config=dp_config  # Enable DP
+)
+
+# Train with DP protection
+params = client.get_parameters(config={})
+updated_params, n_samples, metrics = client.fit(params, config={})
+
+# DP metrics are logged
+print(f"DP epsilon: {metrics['dp_epsilon']}")
+print(f"DP delta: {metrics['dp_delta']}")
+print(f"Train loss (before DP): {metrics['train_loss']:.4f}")
+print(f"Train loss (after DP): {metrics['train_loss_after_dp']:.4f}")
+```
+
+#### Privacy Parameters
+
+- **epsilon (ε)**: Privacy budget parameter. Lower values = stronger privacy.
+  - Typical values: 0.1 to 10.0
+  - Recommendation: Start with ε=1.0 and adjust based on privacy requirements
+  
+- **delta (δ)**: Probability of privacy guarantee failure. Should be cryptographically small.
+  - Typical values: 1e-5 to 1e-7
+  - Recommendation: Set to 1/n_samples or smaller
+  
+- **l2_norm_clip**: Maximum L2 norm for gradient clipping. Controls sensitivity.
+  - Typical values: 0.1 to 5.0
+  - Recommendation: Start with 1.0 and adjust based on model updates
+
+#### Testing and Demo
+
+Run the test suite to validate DP functionality:
+
+```bash
+python test_differential_privacy.py
+```
+
+Run the demo script to see DP in action:
+
+```bash
+python demo_differential_privacy.py
+```
+
+#### Privacy Guarantees
+
+When DP is enabled:
+- Model updates satisfy (ε, δ)-differential privacy
+- Gradient clipping is applied BEFORE model updates are sent to server
+- Gaussian noise is calibrated based on sensitivity and privacy budget
+- Raw gradients are NEVER exposed
+- Privacy budget parameters are logged for audit
 
 For production deployments, consider additional security measures such as:
-- Differential privacy during training
 - Secure aggregation protocols
 - Encrypted communication channels
 - Access control and authentication
+- Regular privacy audits
