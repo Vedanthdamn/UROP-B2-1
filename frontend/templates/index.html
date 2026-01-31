@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Failure Prediction System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .disclaimer {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 30px;
+            color: #856404;
+        }
+        
+        .disclaimer strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .upload-section {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-section.dragover {
+            border-color: #667eea;
+            background: #e8ebff;
+        }
+        
+        .upload-icon {
+            font-size: 60px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .upload-subtext {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .patient-id {
+            font-weight: bold;
+            color: #333;
+            font-size: 18px;
+        }
+        
+        .prediction-badge {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .prediction-yes {
+            background: #fee;
+            color: #c00;
+        }
+        
+        .prediction-no {
+            background: #efe;
+            color: #0a0;
+        }
+        
+        .confidence {
+            font-size: 16px;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .confidence-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        
+        .error {
+            background: #fee;
+            border: 2px solid #c00;
+            border-radius: 10px;
+            padding: 15px;
+            color: #c00;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .error.show {
+            display: block;
+        }
+        
+        .selected-file {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8ebff;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🫀 Heart Failure Prediction System</h1>
+        <p class="subtitle">Federated Learning Medical AI</p>
+        
+        <div class="disclaimer">
+            <strong>⚠️ RESEARCH DISCLAIMER</strong>
+            This system is for research purposes only and is not a medical diagnosis. 
+            Always consult with qualified healthcare professionals for medical advice and diagnosis.
+        </div>
+        
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-icon">➕</div>
+            <div class="upload-text">Upload Patient Report</div>
+            <div class="upload-subtext">Click to select a CSV file or drag and drop</div>
+            <input type="file" id="fileInput" accept=".csv">
+            <div class="selected-file" id="selectedFile" style="display: none;"></div>
+            <button class="btn" id="uploadBtn" style="display: none;">Analyze Report</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing patient data...</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="results" id="results">
+            <h2 style="margin-bottom: 20px; color: #333;">Prediction Results</h2>
+            <div id="resultsContainer"></div>
+        </div>
+    </div>
+    
+    <script>
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const selectedFile = document.getElementById('selectedFile');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const results = document.getElementById('results');
+        const resultsContainer = document.getElementById('resultsContainer');
+        
+        let currentFile = null;
+        
+        // Click to upload
+        uploadSection.addEventListener('click', (e) => {
+            if (e.target !== uploadBtn) {
+                fileInput.click();
+            }
+        });
+        
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                currentFile = e.target.files[0];
+                selectedFile.textContent = `Selected: ${currentFile.name}`;
+                selectedFile.style.display = 'block';
+                uploadBtn.style.display = 'inline-block';
+            }
+        });
+        
+        // Drag and drop
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                currentFile = e.dataTransfer.files[0];
+                selectedFile.textContent = `Selected: ${currentFile.name}`;
+                selectedFile.style.display = 'block';
+                uploadBtn.style.display = 'inline-block';
+            }
+        });
+        
+        // Upload and analyze
+        uploadBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            
+            if (!currentFile) {
+                showError('Please select a file first');
+                return;
+            }
+            
+            // Validate file type
+            if (!currentFile.name.endsWith('.csv')) {
+                showError('Please upload a CSV file');
+                return;
+            }
+            
+            // Show loading
+            loading.classList.add('show');
+            results.classList.remove('show');
+            error.classList.remove('show');
+            uploadBtn.disabled = true;
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', currentFile);
+            
+            try {
+                // Send request
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Prediction failed');
+                }
+                
+                // Display results
+                displayResults(data.predictions);
+                
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                loading.classList.remove('show');
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        function displayResults(predictions) {
+            resultsContainer.innerHTML = '';
+            
+            predictions.forEach(pred => {
+                if (pred.error) {
+                    // Show error for this patient
+                    const errorCard = document.createElement('div');
+                    errorCard.className = 'result-card';
+                    errorCard.style.borderColor = '#c00';
+                    errorCard.innerHTML = `
+                        <div class="patient-id">Patient ${pred.patient_id}</div>
+                        <div style="color: #c00; margin-top: 10px;">Error: ${pred.error}</div>
+                    `;
+                    resultsContainer.appendChild(errorCard);
+                    return;
+                }
+                
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                
+                const predictionClass = pred.prediction === 'Yes' ? 'prediction-yes' : 'prediction-no';
+                const predictionText = pred.prediction === 'Yes' ? 
+                    'Risk of Death Event: HIGH' : 
+                    'Risk of Death Event: LOW';
+                
+                card.innerHTML = `
+                    <div class="result-header">
+                        <div class="patient-id">Patient ${pred.patient_id}</div>
+                        <div class="prediction-badge ${predictionClass}">
+                            ${predictionText}
+                        </div>
+                    </div>
+                    <div class="confidence">
+                        <strong>Confidence Score:</strong> ${pred.confidence}%
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${pred.confidence}%"></div>
+                        </div>
+                    </div>
+                `;
+                
+                resultsContainer.appendChild(card);
+            });
+            
+            results.classList.add('show');
+        }
+        
+        function showError(message) {
+            error.textContent = `Error: ${message}`;
+            error.classList.add('show');
+            setTimeout(() => {
+                error.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
