@@ -209,7 +209,7 @@ def generate_training_summary(history: fl.server.history.History, output_path: s
             losses = [loss[1] for loss in train_loss]
             lines.append(f"- **Initial Loss:** {losses[0]:.4f}")
             lines.append(f"- **Final Loss:** {losses[-1]:.4f}")
-            lines.append(f"- **Loss Improvement:** {losses[0] - losses[-1]:.4f}")
+            lines.append(f"- **Loss Reduction:** {losses[0] - losses[-1]:.4f}")
             lines.append(f"- **Average Loss:** {np.mean(losses):.4f}")
             lines.append("")
         

@@ -1,31 +1,52 @@
 {
   "experiment_config": {
     "num_clients": 5,
-    "num_rounds": 2,
+    "num_rounds": 5,
     "strategy": "fedavg",
-    "use_dp": true,
-    "dp_epsilon": 1.0,
-    "dp_delta": 1e-05,
-    "dp_l2_norm_clip": 1.0,
+    "use_dp": false,
+    "dp_epsilon": null,
+    "dp_delta": null,
+    "dp_l2_norm_clip": null,
     "proximal_mu": null,
     "data_path": "data/heart_failure.csv",
     "random_seed": 42,
     "model": "LSTM (PRIMARY)",
     "data_partitioning": "Non-IID"
   },
-  "timestamp": "2026-01-31T04:38:04.276996",
+  "timestamp": "2026-01-31T04:40:28.495605",
   "rounds": [
     {
       "round": 1,
-      "global_loss": 0.6964007746271726,
-      "global_accuracy": 0.47899159551167686,
+      "global_loss": 0.6858252913010221,
+      "global_accuracy": 0.5504201665645888,
       "participating_clients": 5,
       "total_samples": 238
     },
     {
       "round": 2,
-      "global_loss": 2.388966087533646,
-      "global_accuracy": 0.529411765707641,
+      "global_loss": 0.6770680378965972,
+      "global_accuracy": 0.6176470500581405,
+      "participating_clients": 5,
+      "total_samples": 238
+    },
+    {
+      "round": 3,
+      "global_loss": 0.6647953618975246,
+      "global_accuracy": 0.6638655522290398,
+      "participating_clients": 5,
+      "total_samples": 238
+    },
+    {
+      "round": 4,
+      "global_loss": 0.65592572042922,
+      "global_accuracy": 0.6848739340525716,
+      "participating_clients": 5,
+      "total_samples": 238
+    },
+    {
+      "round": 5,
+      "global_loss": 0.6418217450630765,
+      "global_accuracy": 0.7563025285215939,
       "participating_clients": 5,
       "total_samples": 238
     }
