@@ -875,6 +875,199 @@ UROP-B2-1/
 
 ---
 
+## PDF-Based Inference (Research Demonstration)
+
+### Overview
+
+This repository includes a **separate, offline inference pipeline** that allows predictions using a pre-trained model from PDF blood reports. This feature is provided as a **research demonstration** and is **completely independent** from the federated learning training pipeline.
+
+**Important Architectural Separation:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TRAINING PIPELINE                             │
+│   (Federated Learning with Flower + Differential Privacy)       │
+│   - Multi-hospital collaboration                                │
+│   - Distributed training                                        │
+│   - Privacy-preserving aggregation                              │
+│   - Output: Trained global model                               │
+└─────────────────────────────────────────────────────────────────┘
+
+                            ↓ (saves model)
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   INFERENCE PIPELINE (NEW)                       │
+│   (PDF-based prediction - OFFLINE, NO TRAINING)                 │
+│   - PDF text extraction (digital + OCR)                         │
+│   - Rule-based value extraction                                 │
+│   - Uses pre-trained model for prediction                      │
+│   - NO integration with Flower or FL                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+1. **PDF Text Extraction**:
+   - Uses `pdfplumber` for digital PDFs
+   - Automatically detects empty pages and applies OCR using `pytesseract`
+   - No heavy models like TrOCR
+
+2. **Rule-Based Medical Value Extraction**:
+   - Uses regex patterns to extract medical values
+   - NO BioBERT, NO NLP inference, NO guessing
+   - Supported fields (if present in report):
+     - Age
+     - Sex (male/female → 1/0)
+     - Blood pressure (systolic)
+     - Cholesterol
+     - Fasting blood sugar
+     - Max heart rate
+
+3. **Heart Disease UCI Schema Mapping**:
+   - Maps extracted values to 13-feature vector
+   - Missing values filled with documented defaults
+   - Comments explain each default value
+
+4. **Model Loading**:
+   - Loads trained model from `backend/inference/global_model.h5`
+   - Uses TensorFlow/Keras load_model
+   - Clear error if model is missing
+
+5. **Prediction**:
+   - Binary classification (Disease / No Disease)
+   - Outputs probability and label
+   - Minimal logging of intermediate steps
+
+### Installation
+
+Install additional dependencies for PDF inference:
+
+```bash
+pip install pdfplumber pytesseract Pillow
+
+# For OCR support (pytesseract), also install tesseract binary:
+# Ubuntu/Debian:
+sudo apt-get install tesseract-ocr
+
+# macOS:
+brew install tesseract
+
+# Windows: Download installer from https://github.com/UB-Mannheim/tesseract/wiki
+```
+
+### Usage
+
+**Step 1**: Train the federated model (already implemented):
+
+```bash
+python run_federated_experiments.py
+```
+
+**Step 2**: Save the trained global model:
+
+```bash
+# After training, save model to the inference directory
+# (You'll need to copy/save your trained model to backend/inference/global_model.h5)
+```
+
+**Step 3**: Run inference on a PDF blood report:
+
+```bash
+python backend/inference/pdf_inference.py path/to/blood_report.pdf
+```
+
+**Example Output:**
+
+```
+================================================================================
+PDF INFERENCE PIPELINE
+================================================================================
+Processing: sample_report.pdf
+
+2024-01-31 12:00:00 - INFO - Loading model from: backend/inference/global_model.h5
+2024-01-31 12:00:01 - INFO - Model loaded successfully!
+2024-01-31 12:00:01 - INFO - Extracting text from PDF: sample_report.pdf
+2024-01-31 12:00:02 - INFO - Page 1: Extracted digital text
+2024-01-31 12:00:02 - INFO - Extracted 1250 characters from PDF
+
+2024-01-31 12:00:02 - INFO - Extracting medical values using rule-based patterns...
+2024-01-31 12:00:02 - INFO - Extracted age: 65.0
+2024-01-31 12:00:02 - INFO - Extracted sex: Male (1)
+2024-01-31 12:00:02 - INFO - Extracted blood pressure (systolic): 140.0
+2024-01-31 12:00:02 - INFO - Extracted cholesterol: 250.0
+2024-01-31 12:00:02 - INFO - Extracted 4 values from PDF
+
+2024-01-31 12:00:02 - INFO - Mapping extracted values to UCI Heart Disease schema...
+2024-01-31 12:00:02 - INFO -   age: 65.0 (extracted)
+2024-01-31 12:00:02 - INFO -   sex: 1.0 (extracted)
+2024-01-31 12:00:02 - INFO -   cp: 0 (default)
+2024-01-31 12:00:02 - INFO -   trestbps: 140.0 (extracted)
+2024-01-31 12:00:02 - INFO -   chol: 250.0 (extracted)
+...
+
+2024-01-31 12:00:03 - INFO - Running prediction...
+2024-01-31 12:00:03 - INFO - Prediction: Disease
+2024-01-31 12:00:03 - INFO - Probability: 0.7234
+
+================================================================================
+RESULTS
+================================================================================
+Prediction: Disease
+Probability: 72.34%
+
+⚠️  DISCLAIMER: This is a research demonstration, NOT a medical device.
+   Always consult qualified healthcare professionals for medical advice.
+================================================================================
+```
+
+### What This Is NOT
+
+**OCR and NLP are preprocessing layers, NOT part of the federated learning system:**
+- PDF text extraction happens locally on the inference machine
+- Rule-based value extraction is a simple preprocessing step
+- The federated learning training pipeline never sees or processes PDFs
+- The FL model was trained on structured tabular data, not text
+
+**This is NOT:**
+- ❌ A clinically validated medical device
+- ❌ Integrated with the federated learning training pipeline
+- ❌ Using advanced NLP models (BioBERT, ClinicalBERT, etc.)
+- ❌ Capable of understanding complex medical reports
+- ❌ Reliable for production medical use
+
+**This IS:**
+- ✅ A research demonstration of inference with pre-trained models
+- ✅ An example of how to deploy FL models for prediction
+- ✅ A proof-of-concept for PDF-based medical data extraction
+- ✅ Architecturally separated from the FL training pipeline
+
+### Limitations
+
+1. **Fixed Report Format**: The rule-based extraction expects specific patterns in the PDF
+2. **Limited Field Support**: Only extracts 6 fields; remaining 7 fields use defaults
+3. **No Contextual Understanding**: Uses simple regex, not semantic analysis
+4. **Not Clinically Validated**: Extraction accuracy depends on PDF format
+5. **Research Demo Only**: Not suitable for real medical decision-making
+
+### Future Enhancements (Out of Scope for Current Demo)
+
+- Support for more diverse report formats
+- More sophisticated extraction (e.g., table parsing)
+- Confidence scores for extracted values
+- Multi-page report handling
+- Structured output (JSON/CSV)
+
+### Important Note for Faculty Reviewers
+
+This inference pipeline demonstrates:
+1. ✅ **Separation of Concerns**: Training (FL) and inference (local) are independent
+2. ✅ **Model Deployment**: How to use a trained federated model for predictions
+3. ✅ **Practical Application**: End-to-end workflow from PDF to prediction
+
+The OCR/NLP components are **preprocessing tools**, not part of the federated learning architecture. They operate entirely on the inference machine and do not affect the privacy-preserving training process.
+
+---
+
 ## References
 
 1. Chicco, D., Jurman, G. (2020). Machine learning can predict survival of patients with heart failure from serum creatinine and ejection fraction alone. *BMC Medical Informatics and Decision Making*, 20(16).

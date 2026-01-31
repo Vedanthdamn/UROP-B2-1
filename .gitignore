@@ -8,6 +8,10 @@ __pycache__/
 *.pickle
 /tmp/
 
+# Model files
+*.h5
+*.keras
+
 # IDE
 .vscode/
 .idea/
