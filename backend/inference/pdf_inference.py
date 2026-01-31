@@ -219,8 +219,10 @@ class PDFInference:
         
         # Extract Sex
         # Use more specific patterns to avoid false positives
-        male_match = re.search(r'\b(?:male|man)\b', text_lower)
+        # Match 'female' first to avoid matching 'male' within 'female'
         female_match = re.search(r'\b(?:female|woman)\b', text_lower)
+        # Use negative lookbehind to avoid matching 'male' within 'female'
+        male_match = re.search(r'(?<!fe)\b(?:male|man)\b', text_lower)
         
         if male_match and not female_match:
             values['sex'] = 1.0  # Male
@@ -231,8 +233,8 @@ class PDFInference:
         elif male_match and female_match:
             # Both terms present - try to determine context or default to male
             # Count occurrences to determine which is more likely
-            male_count = len(re.findall(r'\b(?:male|man)\b', text_lower))
             female_count = len(re.findall(r'\b(?:female|woman)\b', text_lower))
+            male_count = len(re.findall(r'(?<!fe)\b(?:male|man)\b', text_lower))
             if female_count > male_count:
                 values['sex'] = 0.0  # Female
                 logger.info(f"Extracted sex: Female (0) - based on frequency")
