@@ -78,8 +78,27 @@ def create_app(config: Dict = None) -> Flask:
                 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
                 history_path = os.path.join(project_root, 'logs', 'training_history.json')
                 data_path = os.path.join(project_root, 'data', 'heart_failure.csv')
+                weights_path = os.path.join(project_root, 'logs', 'model_weights.h5')
                 
-                inference_pipeline.load_model_from_history(history_path, data_path)
+                # Try to load with saved weights
+                if os.path.exists(weights_path):
+                    logger.info(f"Loading model from saved weights: {weights_path}")
+                    inference_pipeline.load_model_from_history(history_path, data_path, weights_path)
+                else:
+                    logger.warning("No saved weights found. Using fresh (untrained) model.")
+                    logger.warning("For trained model, run: python save_model_weights.py")
+                    
+                    # Load just the preprocessor and create an untrained model
+                    from models import get_primary_model
+                    from utils.preprocessing import create_preprocessing_pipeline
+                    import pandas as pd
+                    
+                    data = pd.read_csv(data_path)
+                    inference_pipeline.preprocessor = create_preprocessing_pipeline()
+                    inference_pipeline.preprocessor.fit(data)
+                    inference_pipeline.model = get_primary_model(input_shape=(1, 12))
+                    inference_pipeline.is_loaded = True
+                    
                 logger.info("Inference pipeline initialized successfully!")
             except Exception as e:
                 logger.error(f"Failed to initialize inference pipeline: {e}")
@@ -158,7 +177,12 @@ def create_app(config: Dict = None) -> Flask:
                     
                     # Add patient features (optional, for display)
                     for col in patient_row.columns:
-                        result[col] = patient_row[col].values[0]
+                        value = patient_row[col].values[0]
+                        # Convert numpy types to Python types for JSON serialization
+                        if hasattr(value, 'item'):
+                            result[col] = value.item()
+                        else:
+                            result[col] = value
                     
                     results.append(result)
                     

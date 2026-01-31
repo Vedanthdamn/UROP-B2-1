@@ -62,23 +62,46 @@ class InferencePipeline:
     def load_model_from_history(
         self,
         history_path: str = 'logs/training_history.json',
-        data_path: str = 'data/heart_failure.csv'
+        data_path: str = 'data/heart_failure.csv',
+        model_weights_path: str = None
     ) -> None:
         """
-        Load the trained model by recreating it from training history.
+        Load the trained model.
         
-        Since the model weights are not saved, we recreate the model by
-        simulating the federated training process using the training history.
+        If model_weights_path is provided and exists, loads weights directly.
+        Otherwise, recreates the model by simulating federated training (slow).
         
         Args:
             history_path: Path to training_history.json
             data_path: Path to the training data
+            model_weights_path: Optional path to saved model weights (.h5 or .keras)
             
         Raises:
             FileNotFoundError: If history or data file not found
             ValueError: If history is invalid
         """
-        logger.info("Loading model from training history...")
+        logger.info("Loading model...")
+        
+        # Create the model architecture
+        self.model = get_primary_model(input_shape=self.input_shape)
+        
+        # Try to load saved weights if provided
+        if model_weights_path and os.path.exists(model_weights_path):
+            logger.info(f"Loading model weights from {model_weights_path}...")
+            self.model.load_weights(model_weights_path)
+            
+            # Create and fit preprocessor
+            data = pd.read_csv(data_path)
+            self.preprocessor = create_preprocessing_pipeline()
+            self.preprocessor.fit(data)
+            
+            self.is_loaded = True
+            logger.info("Model loaded successfully from weights!")
+            return
+        
+        # If no saved weights, recreate from training history (slow)
+        logger.info("No saved weights found. Recreating model from training history...")
+        logger.warning("This may take several minutes. Consider saving model weights after training.")
         
         # Load training history
         if not os.path.exists(history_path):
@@ -109,9 +132,6 @@ class InferencePipeline:
             n_clients=num_clients,
             random_seed=random_seed
         )
-        
-        # Create initial model
-        self.model = get_primary_model(input_shape=self.input_shape)
         
         # Simulate federated training to recreate final model
         from federated import create_flower_client
@@ -158,6 +178,8 @@ class InferencePipeline:
         
         self.is_loaded = True
         logger.info("Model loaded successfully!")
+        logger.info("TIP: Save model weights to speed up future loading: model.save_weights('model_weights.h5')")
+
         
     def load_preprocessor(self, preprocessor_path: str = None) -> None:
         """
@@ -230,9 +252,8 @@ class InferencePipeline:
         if 'DEATH_EVENT' in patient_data.columns:
             patient_data = patient_data.drop(columns=['DEATH_EVENT'])
         
-        # Preprocess the data
-        # We need to use transform without target
-        X_processed = self.preprocessor.scaler.transform(patient_data.values)
+        # Preprocess the data using transform without target
+        X_processed = self.preprocessor.transform(patient_data, return_target=False)
         
         # Reshape for model input: (batch_size, sequence_length, n_features)
         X_reshaped = X_processed.reshape(-1, self.input_shape[0], self.input_shape[1])

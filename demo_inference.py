@@ -110,15 +110,39 @@ def main():
     print("Step 3: Initializing inference pipeline...")
     pipeline = InferencePipeline()
     
+    # Check if saved weights exist
+    weights_path = 'logs/model_weights.h5'
+    
     try:
-        print("  - Loading trained model from training history...")
-        pipeline.load_model_from_history(
-            history_path='logs/training_history.json',
-            data_path='data/heart_failure.csv'
-        )
-        print("✓ Model loaded")
+        if os.path.exists(weights_path):
+            print(f"  - Loading model from saved weights: {weights_path}")
+            pipeline.load_model_from_history(
+                history_path='logs/training_history.json',
+                data_path='data/heart_failure.csv',
+                model_weights_path=weights_path
+            )
+        else:
+            print("  - No saved weights found.")
+            print("  - Creating a fresh model for demonstration purposes...")
+            print("  - NOTE: This model is not trained. For real predictions, run:")
+            print("    python save_model_weights.py")
+            
+            # Load just the preprocessor and create an untrained model
+            from models import get_primary_model
+            from utils.preprocessing import create_preprocessing_pipeline
+            import pandas as pd
+            
+            data = pd.read_csv('data/heart_failure.csv')
+            pipeline.preprocessor = create_preprocessing_pipeline()
+            pipeline.preprocessor.fit(data)
+            pipeline.model = get_primary_model(input_shape=(1, 12))
+            pipeline.is_loaded = True
+            
+            print("  - Using fresh (untrained) model for demonstration")
+            
+        print("✓ Pipeline ready")
     except Exception as e:
-        print(f"✗ Error loading model: {e}")
+        print(f"✗ Error initializing pipeline: {e}")
         return 1
     
     print()
