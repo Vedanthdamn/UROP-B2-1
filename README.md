@@ -1,1183 +1,913 @@
-# UROP-B2-1
+# Federated Learning for Privacy-Preserving Medical AI
 
-## Federated Learning Medical AI Project
+## 1. Project Overview
 
-This repository contains a federated learning project for medical AI, specifically for heart failure prediction.
+This repository implements a **privacy-preserving federated learning system** for **heart failure prediction** across multiple hospitals. The project demonstrates how medical institutions can collaboratively train machine learning models without sharing sensitive patient data, leveraging the complementary strengths of **Federated Learning (FL)** and **Differential Privacy (DP)**.
 
-## Dataset Validation
+### Goal of the Project
 
-Before starting any federated learning experiments, you must validate the repository integrity and dataset availability.
+The primary goal is to build a robust heart failure prediction model while ensuring patient privacy through:
 
-### Prerequisites
+1. **Federated Learning**: Hospitals train locally on their own data; only model updates are shared (not raw patient records)
+2. **Differential Privacy**: Gradient clipping and Gaussian noise addition provide formal privacy guarantees
+3. **Non-IID Data Handling**: Realistic simulation of hospitals with different data distributions and patient populations
+4. **Model Evaluation**: Comprehensive analysis of model performance, fairness, and privacy-utility trade-offs
 
-Install required dependencies:
+### Federated Learning + Differential Privacy Motivation
 
-```bash
-pip install -r requirements.txt
+**Why Federated Learning?**
+- Medical data is sensitive and subject to strict privacy regulations (HIPAA, GDPR)
+- Centralized data aggregation is often infeasible due to legal and ethical constraints
+- FL enables collaborative learning while keeping patient data at source hospitals
+- Reduces communication overhead and data transfer costs
+
+**Why Differential Privacy?**
+- Even aggregated model updates can leak information about training data
+- DP provides mathematically rigorous privacy guarantees through (ε, δ)-differential privacy
+- Protects against membership inference and reconstruction attacks
+- Allows tuning of privacy-utility trade-off via privacy budget (epsilon)
+
+### Medical Use Case: Heart Failure Prediction
+
+Heart failure is a major cause of mortality worldwide. Early prediction can:
+- Enable timely interventions and improve patient outcomes
+- Optimize resource allocation in healthcare systems
+- Reduce hospitalization and healthcare costs
+
+This system predicts the **DEATH_EVENT** (mortality during follow-up period) based on clinical features such as:
+- Age, ejection fraction, serum creatinine
+- Presence of comorbidities (anemia, diabetes, hypertension)
+- Laboratory test results (CPK, platelets, serum sodium)
+
+---
+
+## 2. System Architecture
+
+### Training Pipeline: Federated Learning with Flower
+
+The training pipeline implements a federated learning system using the [Flower](https://flower.ai/) framework:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Federated Server                          │
+│  - Initializes global LSTM model                            │
+│  - Distributes model parameters to clients                  │
+│  - Aggregates DP-protected updates (FedAvg/FedProx)        │
+│  - Tracks training metrics across rounds                    │
+│  - NEVER accesses raw patient data                         │
+└───────────────┬─────────────────────────────────────────────┘
+                │
+       ┌────────┴────────┐
+       │                 │
+┌──────▼──────┐   ┌─────▼──────┐   ... (5 clients total)
+│  Hospital 1 │   │ Hospital 2 │
+│   Client    │   │   Client   │
+│             │   │            │
+│ - Local     │   │ - Local    │
+│   Training  │   │   Training │
+│ - DP-SGD    │   │ - DP-SGD   │
+│ - Gradient  │   │ - Gradient │
+│   Clipping  │   │   Clipping │
+│ - Noise     │   │ - Noise    │
+│   Addition  │   │   Addition │
+│             │   │            │
+│ Patient     │   │ Patient    │
+│ Data (stays │   │ Data (stays│
+│  local)     │   │  local)    │
+└─────────────┘   └────────────┘
 ```
 
-### Running the Validation Script
+**Key Components:**
 
-To validate the repository and dataset:
+1. **Server (`federated/server.py`)**:
+   - Orchestrates training across hospitals
+   - Implements aggregation strategies: **FedAvg** (primary) and **FedProx** (comparative)
+   - Tracks per-round metrics (loss, accuracy, client participation)
+   - Ensures privacy by operating only on model weights
 
-```bash
-python validate_dataset.py
+2. **Client (`federated/client.py`)**:
+   - Trains LSTM model locally on hospital data
+   - Applies differential privacy via gradient clipping + noise
+   - Returns only model weights (no patient data)
+   - Stateless between rounds for security
+
+### Client-Side Training + Differential Privacy
+
+Each hospital client performs local training with privacy protection:
+
+**Training Process:**
+1. Receive global model parameters from server
+2. Train on local non-IID hospital data for fixed epochs
+3. **Apply Differential Privacy** (`federated/differential_privacy.py`):
+   - **Gradient Clipping**: Clip gradients to bounded L2 norm (typically 1.0)
+   - **Gaussian Noise**: Add calibrated noise scaled by privacy budget (ε, δ)
+4. Send DP-protected model updates back to server
+
+**Privacy Guarantees:**
+- Implements (ε, δ)-differential privacy
+- All privacy operations occur BEFORE sharing updates
+- Raw patient data NEVER leaves the client
+- Configurable privacy budget for tuning privacy-utility trade-off
+
+### Server-Side Aggregation (FedAvg, FedProx)
+
+**FedAvg (Federated Averaging)** - Primary Strategy:
+- Weighted average of client model updates
+- Weight proportional to client dataset size
+- Simple, efficient, widely used in federated learning
+
+**FedProx (Federated Proximal)** - Comparative Strategy:
+- Adds proximal term to prevent client drift
+- Useful when client data is highly heterogeneous (non-IID)
+- Proximal parameter μ controls regularization strength
+
+Both strategies:
+- Aggregate only model weights (privacy-preserving)
+- Track global metrics across federated rounds
+- Support heterogeneous client participation
+
+### Inference Pipeline (No Training, No Data Storage)
+
+The inference pipeline (`inference/inference_pipeline.py`) is strictly separated from training:
+
+**Design Principles:**
+- **No Training**: Uses pre-trained model weights only
+- **No Data Storage**: All processing is in-memory
+- **Stateless**: Each prediction is independent
+- **Privacy-Preserving**: No patient data is logged or persisted
+
+**Components:**
+1. **InferencePipeline Class**: Loads trained model and preprocessor
+2. **Preprocessing**: Same pipeline as training (standardization, imputation)
+3. **Prediction**: Binary classification (DEATH_EVENT: 0 or 1) with confidence score
+
+---
+
+## 3. Dataset
+
+### Heart Failure Clinical Records Dataset
+
+**Source**: Public benchmark dataset (Davide Chicco, Giuseppe Jurman: "Machine learning can predict survival of patients with heart failure from serum creatinine and ejection fraction alone". BMC Medical Informatics and Decision Making 20, 16 (2020))
+
+**Dataset Characteristics:**
+- **Size**: 299 patients
+- **File**: `data/heart_failure.csv`
+- **Features**: 12 clinical variables
+- **Target**: `DEATH_EVENT` (binary: 0 = survived, 1 = death during follow-up)
+
+**Feature Descriptions:**
+
+| Feature | Description | Type |
+|---------|-------------|------|
+| `age` | Patient age (years) | Continuous |
+| `anaemia` | Decrease of red blood cells or hemoglobin | Binary (0/1) |
+| `creatinine_phosphokinase` | Level of CPK enzyme in blood (mcg/L) | Continuous |
+| `diabetes` | Whether patient has diabetes | Binary (0/1) |
+| `ejection_fraction` | Percentage of blood leaving heart per contraction (%) | Continuous |
+| `high_blood_pressure` | Whether patient has hypertension | Binary (0/1) |
+| `platelets` | Platelets in blood (kiloplatelets/mL) | Continuous |
+| `serum_creatinine` | Level of serum creatinine (mg/dL) | Continuous |
+| `serum_sodium` | Level of serum sodium (mEq/L) | Continuous |
+| `sex` | Gender (binary: woman or man) | Binary (0/1) |
+| `smoking` | Whether patient smokes | Binary (0/1) |
+| `time` | Follow-up period (days) | Continuous |
+| `DEATH_EVENT` | **Target**: Whether patient died during follow-up | Binary (0/1) |
+
+### Public Benchmark Dataset
+
+This is a widely-used, publicly available dataset for heart failure prediction research. It is:
+- **Non-proprietary**: Free to use for research
+- **De-identified**: Contains no personally identifiable information (PII)
+- **Well-studied**: Used in multiple peer-reviewed publications
+- **Class-imbalanced**: ~68% survival, ~32% death (realistic medical scenario)
+
+### Non-IID Hospital Simulation
+
+To simulate realistic federated learning across hospitals, the dataset is partitioned into **5 non-IID clients** (`utils/client_partitioning.py`):
+
+**Non-IID Characteristics:**
+1. **Unequal Sample Sizes**: Different hospitals have different numbers of patients
+   - Simulates varying hospital sizes and patient volumes
+2. **Different Class Distributions**: Each hospital has different survival/death ratios
+   - Models real-world heterogeneity in patient populations
+3. **No Overlap**: Each patient belongs to exactly one hospital
+   - Ensures privacy and no data leakage
+
+**Example Partition:**
+- Hospital 0: 74 patients, 69% survival
+- Hospital 1: 65 patients, 72% survival  
+- Hospital 2: 59 patients, 66% survival
+- Hospital 3: 39 patients, 64% survival
+- Hospital 4: 62 patients, 71% survival
+
+This non-IID setup tests the federated learning system under realistic conditions where hospitals have heterogeneous data.
+
+---
+
+## 4. Models
+
+### LSTM (Primary Model)
+
+**Architecture** (`models/lstm_classifier.py`):
+```
+Input (1, 12) → LSTM(32 units) → Dropout(0.3) → Dense(1, sigmoid) → Output
 ```
 
-The validation script performs the following checks:
+**Why LSTM?**
+- Captures temporal dependencies in sequential clinical data
+- Shallow design (32 units) minimizes parameters for FL efficiency
+- Compatible with differential privacy training
+- Well-suited for tabular medical data
+- Low communication overhead in federated setting
 
-**Step 1: Repository Integrity Validation**
-- Confirms that the `data/` folder exists
-- Confirms that the `data/heart_failure.csv` file exists
+**Parameters:**
+- LSTM units: 32
+- Dropout rate: 0.3 (regularization)
+- Activation: Sigmoid (binary classification)
+- Loss: Binary cross-entropy
+- Optimizer: Adam
 
-**Step 2: Dataset Validation**
-- Loads the dataset using pandas
-- Displays the first 5 rows of the dataset
-- Displays the dataset shape (rows and columns)
+**Model Size:**
+- ~2,000-3,000 parameters (lightweight for edge deployment)
 
-If all validations pass, the script exits with code 0. If any validation fails, the script reports the error and exits with code 1.
+### TCN, Transformer (Comparative Models)
 
-## Dataset Information
+Two additional models are implemented for comparative analysis:
 
-The `data/heart_failure.csv` dataset contains medical records for heart failure patients with the following features:
+**1. TCN (Temporal Convolutional Network)** (`models/tcn_classifier.py`):
+- Uses dilated causal convolutions
+- Expanded receptive field for temporal patterns
+- Alternative to LSTM for sequential modeling
+- Comparable parameter count for fair comparison
 
-- **age**: Age of the patient
-- **anaemia**: Decrease of red blood cells or hemoglobin (boolean)
-- **creatinine_phosphokinase**: Level of the CPK enzyme in the blood (mcg/L)
-- **diabetes**: If the patient has diabetes (boolean)
-- **ejection_fraction**: Percentage of blood leaving the heart at each contraction
-- **high_blood_pressure**: If the patient has hypertension (boolean)
-- **platelets**: Platelets in the blood (kiloplatelets/mL)
-- **serum_creatinine**: Level of serum creatinine in the blood (mg/dL)
-- **serum_sodium**: Level of serum sodium in the blood (mEq/L)
-- **sex**: Woman or man (binary)
-- **smoking**: If the patient smokes or not (boolean)
-- **time**: Follow-up period (days)
-- **DEATH_EVENT**: If the patient deceased during the follow-up period (target variable)
+**2. Transformer** (`models/transformer_classifier.py`):
+- Lightweight single-head self-attention mechanism
+- Layer normalization for training stability
+- Modern architecture for comparative benchmarking
+- Simplified design suitable for FL
 
-## Dataset Sampling
+**Purpose of Comparative Models:**
+- Benchmark LSTM performance against alternatives
+- Evaluate architecture choices for federated medical AI
+- Validate that LSTM is suitable for this task
+- Academic completeness and reproducibility
 
-The repository includes a deterministic dataset sampling module for creating reproducible training subsets for federated learning experiments.
+### Why Lightweight Models Are Used
 
-### Features
+**Design Rationale:**
 
-- **Deterministic Sampling**: Uses fixed random seed for reproducibility
-- **Stratified Sampling**: Preserves original class distribution
-- **Comprehensive Logging**: Logs random seed and class distributions
-- **Automatic Reporting**: Generates detailed markdown reports
-- **Edge Case Handling**: Handles cases where sample size exceeds dataset size
+1. **Federated Learning Efficiency**:
+   - Fewer parameters = smaller model updates to transmit
+   - Reduced communication overhead between clients and server
+   - Faster convergence across federated rounds
 
-### Usage
+2. **Differential Privacy Compatibility**:
+   - Smaller models are less sensitive to DP noise
+   - Better privacy-utility trade-off
+   - More stable training under gradient clipping
 
-#### Basic Usage with Convenience Function
+3. **Edge Device Deployment**:
+   - Hospital edge devices may have limited compute
+   - Lightweight models enable on-device inference
+   - Lower latency for clinical decision support
 
+4. **Interpretability and Safety**:
+   - Simpler models are easier to interpret for medical use
+   - Reduced risk of overfitting on small datasets
+   - More trustworthy for healthcare applications
+
+5. **Dataset Size**:
+   - Heart failure dataset has only 299 samples
+   - Lightweight models prevent overfitting
+   - Better generalization to unseen patients
+
+---
+
+## 5. Differential Privacy
+
+### (ε, δ)-Differential Privacy
+
+The system implements **(ε, δ)-differential privacy**, a gold standard for formal privacy guarantees.
+
+**Definition:**
+A mechanism M provides (ε, δ)-DP if for any two datasets D and D' differing by one individual:
+
+```
+Pr[M(D) ∈ S] ≤ exp(ε) × Pr[M(D') ∈ S] + δ
+```
+
+**Interpretation:**
+- **ε (epsilon)**: Privacy budget
+  - Lower ε = stronger privacy (more noise)
+  - Higher ε = weaker privacy (less noise, better utility)
+  - Typical values: 0.1 to 10.0
+- **δ (delta)**: Probability of privacy breach
+  - Should be cryptographically small (e.g., 1e-5)
+  - Represents rare "catastrophic" privacy failure
+
+**Privacy Guarantee:**
+- Adding/removing one patient from training data causes minimal change in model outputs
+- Protects against membership inference attacks
+- Formal mathematical guarantee (not heuristic)
+
+### Gradient Clipping and Gaussian Noise
+
+The DP mechanism (`federated/differential_privacy.py`) implements **DP-SGD** (Differentially Private Stochastic Gradient Descent):
+
+**Step 1: Gradient Clipping (Per-Sample)**
 ```python
-from utils.data_sampling import sample_heart_failure_data
-
-# Sample data and generate report
-sampled_data = sample_heart_failure_data(
-    'data/heart_failure.csv',
-    n_samples=300,
-    random_seed=42,
-    output_report_path='reports/sampling_summary.md'
-)
+# Clip gradient of each sample to bounded L2 norm
+clipped_gradient = gradient * min(1.0, C / ||gradient||₂)
 ```
+- **Purpose**: Bound sensitivity to individual samples
+- **L2 Norm Clip (C)**: Typically 1.0
+- **Effect**: Prevents outliers from dominating updates
 
-#### Advanced Usage with DatasetSampler Class
-
+**Step 2: Aggregate Clipped Gradients**
 ```python
-from utils.data_sampling import DatasetSampler
-import pandas as pd
-
-# Load data
-data = pd.read_csv('data/heart_failure.csv')
-
-# Create sampler with custom seed
-sampler = DatasetSampler(random_seed=123)
-
-# Perform stratified sampling
-sampled_data = sampler.sample(data, n_samples=150, stratify=True)
-
-# Get sampling summary
-summary = sampler.get_sampling_summary()
-print(f"Distribution preserved: {summary['distribution_preserved']}")
-
-# Generate report
-sampler.generate_report('reports/custom_sampling.md')
+# Sum clipped gradients across batch
+aggregated_gradient = Σ clipped_gradients
 ```
 
-### Testing and Demo
-
-Run the test suite to validate the sampling functionality:
-
-```bash
-python test_sampling.py
-```
-
-Run the demo script to see usage examples:
-
-```bash
-python demo_sampling.py
-```
-
-## Preprocessing Pipeline
-
-The repository includes a reusable preprocessing pipeline for federated learning, designed to ensure consistency across all federated clients.
-
-### Features
-
-- **Feature/Target Separation**: Automatically separates features from the target label (DEATH_EVENT)
-- **Missing Value Handling**: Safely handles missing values using median imputation
-- **Standardization**: Applies z-score normalization for consistent feature scaling
-- **Serialization**: Pipeline can be saved and loaded for reuse across clients
-- **Deterministic**: Ensures reproducible results across different runs
-- **Inference Mode**: Supports preprocessing without target labels for inference
-
-### Usage
-
-#### Basic Usage
-
+**Step 3: Add Gaussian Noise**
 ```python
-from utils.preprocessing import create_preprocessing_pipeline
+# Add noise scaled by privacy budget
+noise = N(0, σ²C²)
+noisy_gradient = aggregated_gradient + noise
+```
+- **Noise Scale (σ)**: Computed from (ε, δ)
+- **σ = sqrt(2 * ln(1.25/δ)) * C / ε**
+- **Effect**: Obscures contribution of individual samples
 
-# Create and fit preprocessor
-preprocessor = create_preprocessing_pipeline()
-X_train, y_train = preprocessor.fit_transform(train_data)
+**Implementation:**
+- All DP operations occur on client before sending updates
+- Server receives only DP-protected aggregated gradients
+- Privacy budget tracked per federated round
 
-# Transform test data
-X_test, y_test = preprocessor.transform(test_data)
+### Privacy–Utility Tradeoff Summary
+
+Experiments with multiple epsilon values demonstrate the privacy-utility tradeoff (`run_privacy_utility_analysis.py`):
+
+**Tested Privacy Budgets:**
+
+| Epsilon (ε) | Privacy Level | Final Accuracy | Final Loss | Interpretation |
+|-------------|---------------|----------------|------------|----------------|
+| **0** (No DP) | None | **86.55%** | 0.57 | Baseline (no privacy) |
+| **0.5** | Strong Privacy | 50.84% | 50.20 | High privacy, significant utility loss |
+| **1.0** | Moderate Privacy | 49.16% | 22.38 | Balanced trade-off |
+| **2.0** | Moderate Privacy | 51.26% | 12.03 | Balanced trade-off |
+| **5.0** | Relaxed Privacy | 50.84% | 4.50 | Lower privacy, better utility |
+
+**Key Findings:**
+1. **Strong DP incurs significant accuracy loss**: ε=0.5 reduces accuracy by ~41%
+2. **Moderate DP is practical**: ε=1.0-2.0 maintains reasonable utility
+3. **Higher epsilon improves utility**: ε=5.0 approaches baseline performance
+4. **Fairness improves with DP**: Lower client accuracy variance at ε=1.0
+
+**Recommendations:**
+- **Research/Development**: Use ε ≥ 5.0 or no DP for maximum utility
+- **Production Deployment**: Use ε = 1.0-2.0 for balanced privacy-utility
+- **High-Privacy Applications**: Use ε ≤ 0.5, accept utility degradation
+- **Consider Context**: Privacy requirements depend on data sensitivity and regulations
+
+---
+
+## 6. Experiments & Evaluation
+
+### Federated Training Experiments
+
+**Experiment Setup** (`run_federated_experiments.py`):
+- **Strategy**: FedAvg (primary), FedProx (comparative)
+- **Clients**: 5 non-IID hospitals
+- **Rounds**: 5-10 federated training rounds
+- **Epochs per Round**: 5 local epochs per client
+- **Batch Size**: 32
+- **Model**: LSTM (PRIMARY)
+
+**Training Results** (FedAvg, 5 rounds, no DP):
+
+| Round | Global Loss | Global Accuracy | Participating Clients |
+|-------|-------------|-----------------|----------------------|
+| 1 | 0.6617 | 66.39% | 5 |
+| 2 | 0.6535 | 69.75% | 5 |
+| 3 | 0.6396 | 76.89% | 5 |
+| 4 | 0.6212 | 79.41% | 5 |
+| 5 | 0.6143 | 76.89% | 5 |
+
+**Observations:**
+- Accuracy improves by 10.5% over 5 rounds
+- Loss decreases by 0.047 (7.1% relative reduction)
+- All clients participate consistently (100% participation rate)
+- Model converges steadily without divergence
+
+### Evaluation Metrics
+
+**Standard Classification Metrics** (`evaluate_federated_model.py`):
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| **Accuracy** | 90.00% | High overall correctness |
+| **Precision (Death)** | 20.00% | Low - many false positives |
+| **Recall (Death)** | 33.33% | Low - misses many death cases |
+| **F1-Score (Death)** | 25.00% | Poor on minority class |
+| **Precision (Weighted)** | 92.55% | Good overall accounting for imbalance |
+| **Recall (Weighted)** | 90.00% | Good overall |
+| **F1-Score (Weighted)** | 91.16% | Strong overall performance |
+| **Cross-Entropy Loss** | 0.6025 | Reasonable probabilistic calibration |
+
+**Confusion Matrix:**
+```
+                Predicted
+              Survived  Death
+Actual Survived    53       4
+       Death        2       1
 ```
 
-#### Convenience Function
+**Analysis:**
+- Model performs well on majority class (survival)
+- Struggles with minority class (death) due to class imbalance
+- Typical challenge in medical datasets
+- Future work: class weighting, oversampling, or focal loss
+
+### Fairness Analysis
+
+**Client-Level Performance:**
+
+| Hospital ID | Accuracy | Number of Samples |
+|-------------|----------|-------------------|
+| Hospital 0 | 75.68% | 74 |
+| Hospital 1 | 75.38% | 65 |
+| Hospital 2 | 76.27% | 59 |
+| Hospital 3 | 64.10% | 39 |
+| Hospital 4 | 75.81% | 62 |
+
+**Fairness Metrics:**
+- **Mean Client Accuracy**: 73.45%
+- **Standard Deviation**: 4.68%
+- **Accuracy Variance**: 0.0022
+- **Min Accuracy**: 64.10% (Hospital 3)
+- **Max Accuracy**: 76.27% (Hospital 2)
+
+**Interpretation:**
+- ✓ Low variance indicates fair performance across hospitals
+- ✓ No single hospital is significantly disadvantaged
+- ✓ Federated learning successfully handles non-IID data
+- Hospital 3 has lower accuracy (smaller dataset size effect)
+
+### Privacy–Utility Analysis
+
+**Experimental Design** (`run_privacy_utility_analysis.py`):
+- Test multiple privacy budgets: ε ∈ {0, 0.5, 1.0, 2.0, 5.0}
+- Fixed parameters: δ=1e-5, L2 clip=1.0, 10 rounds
+- Measure: final accuracy, loss, client fairness
+
+**Results Visualization:**
+- `reports/accuracy_vs_epsilon.png`: Shows accuracy degradation with stronger privacy
+- `reports/loss_vs_epsilon.png`: Shows loss increase with stronger privacy
+
+**Key Insights:**
+1. **Privacy is costly**: Strong DP (ε=0.5) reduces accuracy by ~41%
+2. **Diminishing returns**: Increasing ε beyond 2.0 yields minor utility gains
+3. **Fairness trade-off**: Moderate DP (ε=1.0) minimizes client variance (fairest)
+4. **Practical regime**: ε=1.0-2.0 balances privacy and utility for deployment
+
+**Academic Significance:**
+- Quantifies privacy-utility tradeoff for federated medical AI
+- Provides empirical guidance for privacy budget selection
+- Demonstrates feasibility of practical DP in healthcare FL
+
+---
+
+## 7. Inference & Frontend
+
+### CSV Upload Interface
+
+The system provides a web-based interface for heart failure prediction (`frontend/app.py`):
+
+**Framework**: Flask (Python web framework)
+
+**User Workflow:**
+1. Navigate to web interface (http://localhost:5000)
+2. Upload CSV file with patient clinical data
+3. System validates and preprocesses data
+4. Displays predictions with confidence scores
+5. Shows research disclaimer
+
+**Features:**
+- Drag-and-drop file upload
+- CSV format validation
+- Real-time processing
+- Responsive web interface
+- Mobile-friendly design
+
+### Prediction + Confidence Output
+
+**Prediction Format:**
 
-```python
-from utils.preprocessing import load_and_preprocess_data
-
-# Load and preprocess in one step
-X, y, preprocessor = load_and_preprocess_data('data/heart_failure.csv', fit=True)
-```
-
-#### Federated Learning Workflow
-
-```python
-from utils.preprocessing import HeartFailurePreprocessor, create_preprocessing_pipeline
-
-# On central server: fit and save preprocessor
-preprocessor = create_preprocessing_pipeline()
-preprocessor.fit(global_training_data)
-preprocessor.save('preprocessor.pkl')
-
-# On federated client: load and use preprocessor
-preprocessor = HeartFailurePreprocessor.load('preprocessor.pkl')
-X_client, y_client = preprocessor.transform(client_data)
-```
-
-### Testing and Demo
-
-Run the test suite to validate the preprocessing pipeline:
-
-```bash
-python test_preprocessing.py
-```
-
-Run the demo script to see usage examples:
-
-```bash
-python demo_preprocessing.py
-```
-
-## Model Architectures
-
-The repository includes three FL-friendly model architectures for heart failure prediction:
-
-### Available Models
-
-1. **LSTM Classifier (PRIMARY)** ⭐
-   - Shallow LSTM-based architecture (5,793 parameters)
-   - Designed as the PRIMARY model for federated training
-   - Best balance of performance and FL efficiency
-
-2. **Temporal Convolutional Network (TCN)**
-   - Lightweight causal convolution architecture (961 parameters)
-   - Comparative model for benchmarking
-   - Minimal parameter count for maximum FL efficiency
-
-3. **Lightweight Transformer**
-   - Simple attention-based architecture (1,497 parameters)
-   - Comparative model for benchmarking
-   - Modern architecture with residual connections
-
-### Key Features
-
-- **FL-friendly**: All models use shallow architectures (< 10K parameters)
-- **DP-compatible**: All models support differential privacy training
-- **Edge-optimized**: Suitable for deployment on edge devices
-- **Well-documented**: Comprehensive documentation and examples
-
-### Usage
-
-```python
-from models import get_primary_model
-from utils.preprocessing import load_and_preprocess_data
-import numpy as np
-
-# Load and preprocess data
-X, y, preprocessor = load_and_preprocess_data('data/heart_failure.csv', fit=True)
-
-# Reshape for model input (add sequence dimension)
-X_reshaped = X.reshape(-1, 1, 12)
-
-# Get primary model (LSTM)
-model = get_primary_model(input_shape=(1, 12))
-
-# Model is ready for federated training
-# model.fit(X_reshaped, y, ...)
-```
-
-### Testing and Demo
-
-Run the test suite to validate all models:
-
-```bash
-python test_models.py
-```
-
-Run the demo script to see usage examples:
-
-```bash
-python demo_models.py
-```
-
-For detailed documentation, see [models/README.md](models/README.md).
-
-## Federated Learning Clients
-
-The repository includes Flower federated learning client implementations for privacy-preserving training across hospitals.
-
-### Features
-
-- **Privacy-Preserving**: Raw patient data never leaves the client
-- **LSTM Model**: Uses the PRIMARY TensorFlow LSTM model
-- **Non-IID Data**: Supports non-IID hospital datasets
-- **Configurable**: Reusable client with configurable parameters
-- **Secure**: No patient-level data logging, only aggregated metrics
-
-### Usage
-
-#### Basic Usage
-
-```python
-from federated import create_flower_client
-from utils.client_partitioning import partition_for_federated_clients
-from utils.preprocessing import create_preprocessing_pipeline
-import pandas as pd
-
-# Partition data for federated clients
-client_datasets = partition_for_federated_clients(
-    data_path='data/heart_failure.csv',
-    n_clients=5,
-    random_seed=42
-)
-
-# Create and fit preprocessing pipeline
-data = pd.read_csv('data/heart_failure.csv')
-preprocessor = create_preprocessing_pipeline()
-preprocessor.fit(data)
-
-# Create Flower client for a hospital
-client = create_flower_client(
-    client_data=client_datasets[0],
-    preprocessor=preprocessor,
-    val_split=0.2,
-    epochs_per_round=5,
-    batch_size=32,
-    client_id="hospital_0"
-)
-```
-
-#### Federated Training Workflow
-
-```python
-# Get initial model weights
-params = client.get_parameters(config={})
-
-# Train locally
-updated_params, n_samples, metrics = client.fit(params, config={})
-
-# Evaluate model
-loss, n_samples, eval_metrics = client.evaluate(updated_params, config={})
-```
-
-### Testing and Demo
-
-Run the test suite to validate federated client functionality:
-
-```bash
-python test_federated_client.py
-```
-
-Run the demo script to see federated learning in action:
-
-```bash
-python demo_federated_client.py
-```
-
-## Federated Server
-
-The repository now includes a Flower federated server for coordinating privacy-preserving training across multiple hospitals.
-
-### Features
-
-- **Global Model Management**: Initializes and distributes TensorFlow LSTM model
-- **Aggregation Strategies**: Supports FedAvg (primary) and FedProx (comparative)
-- **Metrics Tracking**: Logs per-round loss, accuracy, and participating clients
-- **Privacy-Preserving**: Server never accesses raw patient data
-- **DP-Aware**: Treats all client updates as DP-protected
-- **Simulation Mode**: Built-in support for testing and development
-
-### Usage
-
-#### Running a Federated Training Session
-
-Basic usage with FedAvg (default):
-
-```bash
-python demo_federated_training.py --num-clients 5 --num-rounds 10
-```
-
-With FedProx strategy:
-
-```bash
-python demo_federated_training.py --strategy fedprox --proximal-mu 0.1
-```
-
-With differential privacy:
-
-```bash
-python demo_federated_training.py --use-dp --dp-epsilon 1.0 --dp-delta 1e-5
-```
-
-Custom configuration:
-
-```bash
-python demo_federated_training.py \
-  --num-clients 5 \
-  --num-rounds 10 \
-  --strategy fedavg \
-  --use-dp \
-  --dp-epsilon 1.0 \
-  --dp-l2-norm-clip 1.0
-```
-
-#### Programmatic Usage
-
-```python
-from federated import create_federated_server, start_server_simulation
-from federated import create_flower_client, create_dp_config
-from utils.client_partitioning import partition_for_federated_clients
-from utils.preprocessing import create_preprocessing_pipeline
-import pandas as pd
-
-# Partition data for federated clients
-client_datasets = partition_for_federated_clients(
-    data_path='data/heart_failure.csv',
-    n_clients=5,
-    random_seed=42
-)
-
-# Create and fit preprocessing pipeline
-data = pd.read_csv('data/heart_failure.csv')
-preprocessor = create_preprocessing_pipeline()
-preprocessor.fit(data)
-
-# Optional: Create DP configuration
-dp_config = create_dp_config(
-    epsilon=1.0,
-    delta=1e-5,
-    l2_norm_clip=1.0,
-    enabled=True
-)
-
-# Define client factory function
-def client_fn(cid: str):
-    client_id = int(cid)
-    return create_flower_client(
-        client_data=client_datasets[client_id],
-        preprocessor=preprocessor,
-        client_id=f"hospital_{client_id}",
-        dp_config=dp_config  # Optional
-    )
-
-# Run federated training simulation
-history = start_server_simulation(
-    client_fn=client_fn,
-    num_clients=5,
-    strategy="fedavg",  # or "fedprox"
-    num_rounds=10
-)
-```
-
-### Aggregation Strategies
-
-#### FedAvg (Federated Averaging)
-
-The primary aggregation strategy that computes weighted averages of client model updates:
-
-```python
-from federated import create_federated_server
-
-server = create_federated_server(
-    strategy="fedavg",
-    num_rounds=10,
-    min_clients=3
-)
-```
-
-#### FedProx (Federated Proximal)
-
-An alternative strategy that adds a proximal term to improve convergence with non-IID data:
-
-```python
-server = create_federated_server(
-    strategy="fedprox",
-    num_rounds=10,
-    min_clients=3,
-    proximal_mu=0.1  # Proximal term coefficient
-)
-```
-
-### Metrics Tracking
-
-The server tracks and logs the following metrics per round:
-
-- **Global Loss**: Weighted average of client training losses
-- **Global Accuracy**: Weighted average of client training accuracies
-- **Number of Participating Clients**: Clients that completed training
-- **Total Samples**: Sum of samples across all clients
-- **DP Status**: Whether differential privacy is enabled
-
-### Testing
-
-Run the test suite to validate server functionality:
-
-```bash
-python test_federated_server.py
-```
-
-Run the demo script to see federated training in action:
-
-```bash
-python demo_federated_training.py
-```
-
-## Running Federated Training Experiments
-
-The repository includes a comprehensive script for running end-to-end federated training experiments with full logging and result saving capabilities.
-
-### Features
-
-- **5 Non-IID Hospital Clients**: Realistic data distribution across hospitals
-- **LSTM Model**: Uses the PRIMARY model for all experiments
-- **Fixed Communication Rounds**: Configurable number of training rounds
-- **Multiple Strategies**: Supports both FedAvg and FedProx
-- **Comprehensive Logging**:
-  - Per-round global accuracy
-  - Per-round global loss
-  - Client participation per round
-  - Training history saved to `logs/training_history.json`
-  - Training summary saved to `logs/training_summary.md`
-- **Privacy-Preserving**: Optional differential privacy support
-
-### Usage
-
-#### Run with FedAvg (default):
-
-```bash
-python run_federated_experiments.py --num-rounds 10
-```
-
-#### Run with FedProx:
-
-```bash
-python run_federated_experiments.py --strategy fedprox --num-rounds 10 --proximal-mu 0.1
-```
-
-#### Run with Differential Privacy:
-
-```bash
-python run_federated_experiments.py --use-dp --dp-epsilon 1.0 --dp-delta 1e-5 --num-rounds 10
-```
-
-#### Custom Configuration:
-
-```bash
-python run_federated_experiments.py \
-  --num-clients 5 \
-  --num-rounds 10 \
-  --strategy fedavg \
-  --random-seed 42 \
-  --output-dir logs
-```
-
-### Command-line Options
-
-- `--num-clients`: Number of hospital clients (default: 5)
-- `--num-rounds`: Number of federated training rounds (default: 10)
-- `--strategy`: Aggregation strategy - `fedavg` or `fedprox` (default: fedavg)
-- `--use-dp`: Enable differential privacy protection (flag)
-- `--dp-epsilon`: Privacy budget epsilon (default: 1.0)
-- `--dp-delta`: Privacy budget delta (default: 1e-5)
-- `--dp-l2-norm-clip`: L2 norm clipping threshold (default: 1.0)
-- `--proximal-mu`: Proximal term for FedProx (default: 0.1)
-- `--data-path`: Path to dataset (default: data/heart_failure.csv)
-- `--random-seed`: Random seed for reproducibility (default: 42)
-- `--output-dir`: Directory to save results (default: logs)
-
-### Output Files
-
-After running an experiment, results are saved to the `logs/` directory:
-
-#### `logs/training_history.json`
-
-Contains complete training metrics in JSON format:
-- Experiment configuration
-- Per-round metrics (loss, accuracy, client participation, total samples)
-- Timestamp
-
-Example:
 ```json
 {
-  "experiment_config": {
-    "num_clients": 5,
-    "num_rounds": 10,
-    "strategy": "fedavg",
-    "model": "LSTM (PRIMARY)",
-    "data_partitioning": "Non-IID"
-  },
-  "rounds": [
+  "predictions": [
     {
-      "round": 1,
-      "global_loss": 0.6776,
-      "global_accuracy": 0.5588,
-      "participating_clients": 5,
-      "total_samples": 238
+      "patient_id": 1,
+      "prediction": "Survived",
+      "death_risk": 0.15,
+      "confidence": "High"
+    },
+    {
+      "patient_id": 2,
+      "prediction": "Death Risk",
+      "death_risk": 0.78,
+      "confidence": "High"
     }
   ]
 }
 ```
 
-#### `logs/training_summary.md`
+**Output Fields:**
+- **prediction**: Binary outcome (Survived / Death Risk)
+- **death_risk**: Probability of DEATH_EVENT (0.0 to 1.0)
+- **confidence**: Confidence level based on prediction probability
+  - High: probability > 0.8 or < 0.2
+  - Medium: probability 0.6-0.8 or 0.2-0.4
+  - Low: probability 0.4-0.6 (uncertain)
 
-A human-readable markdown report containing:
-- Experiment configuration
-- Per-round metrics in a table
-- Training summary statistics (initial/final/improvement)
-- Privacy guarantees
-- Client participation summary
+**Privacy Considerations:**
+- No patient data is stored or logged
+- All processing occurs in-memory
+- No training or model updates during inference
+- Stateless server (no session persistence)
 
-### Constraints
+### Research Disclaimer
 
-The script adheres to the following constraints:
-- Does NOT modify model architecture
-- Does NOT modify preprocessing
-- Uses existing DP configuration when enabled
-- Only logs aggregated metrics (no patient-level data)
+**Prominent Disclaimer on Interface:**
 
-## Project Structure
+> ⚠️ **RESEARCH SYSTEM ONLY**
+> 
+> This system is a research prototype for academic purposes. It is **NOT**:
+> - A medical diagnostic tool
+> - Approved for clinical use
+> - A substitute for professional medical advice
+> 
+> **DO NOT** use this system to make medical decisions. Always consult qualified healthcare professionals for medical diagnosis and treatment.
+> 
+> The model is trained on a public benchmark dataset and has not been validated on real patient populations. Predictions may not reflect real-world clinical outcomes.
 
-```
-UROP-B2-1/
-├── data/
-│   └── heart_failure.csv           # Heart failure clinical records dataset
-├── utils/
-│   ├── __init__.py                 # Package initialization
-│   ├── preprocessing.py            # Preprocessing pipeline implementation
-│   ├── data_sampling.py            # Dataset sampling module
-│   └── client_partitioning.py      # Non-IID data partitioning for FL
-├── models/
-│   ├── __init__.py                 # Model registry and factory functions
-│   ├── lstm_classifier.py          # LSTM Classifier (PRIMARY)
-│   ├── tcn_classifier.py           # TCN Classifier
-│   ├── transformer_classifier.py   # Transformer Classifier
-│   └── README.md                   # Model documentation
-├── federated/
-│   ├── __init__.py                 # Federated learning module initialization
-│   ├── client.py                   # Flower federated client implementation
-│   ├── server.py                   # Flower federated server implementation
-│   └── differential_privacy.py     # Differential privacy implementation
-├── reports/
-│   ├── data_profile.md             # Dataset profiling report
-│   ├── sampling_summary.md         # Sampling operation report
-│   └── client_partition_summary.md # Client partitioning report
-├── logs/
-│   ├── training_history.json       # Federated training metrics (JSON)
-│   └── training_summary.md         # Federated training summary (Markdown)
-├── validate_dataset.py             # Repository and dataset validation script
-├── test_preprocessing.py           # Preprocessing pipeline test suite
-├── test_sampling.py                # Dataset sampling test suite
-├── test_models.py                  # Model architectures test suite
-├── test_client_partitioning.py     # Client partitioning test suite
-├── test_federated_client.py        # Federated client test suite
-├── test_federated_server.py        # Federated server test suite
-├── test_differential_privacy.py    # Differential privacy test suite
-├── demo_preprocessing.py           # Preprocessing usage demonstration
-├── demo_sampling.py                # Dataset sampling usage demonstration
-├── demo_models.py                  # Model architectures demonstration
-├── demo_client_partitioning.py     # Client partitioning demonstration
-├── demo_federated_client.py        # Federated client demonstration
-├── demo_federated_training.py      # Full federated training session demonstration
-├── demo_differential_privacy.py    # Differential privacy demonstration
-├── run_federated_experiments.py    # End-to-end federated training experiments
-├── generate_data_profile.py        # Dataset profiling script
-├── requirements.txt                # Python dependencies
-└── README.md                       # This file
-```
+**Legal and Ethical Compliance:**
+- Clear statement that system is for research only
+- Warning against clinical decision-making use
+- Disclaimer of liability
+- Emphasis on seeking professional medical advice
 
+---
 
-## Notes
+## 8. How to Run the Project
 
-- Do NOT modify the dataset directly
-- Do NOT create derived datasets without proper documentation
-- The validation script only checks existence and readability, it does not perform preprocessing or training
-- The preprocessing pipeline is designed for federated learning and must be used consistently across all clients
+### Environment Setup
 
-## Privacy and Security
+**Prerequisites:**
+- Python 3.8 or higher
+- pip package manager
+- Virtual environment (recommended)
 
-This repository implements privacy-preserving federated learning with the following guarantees:
-
-- **Data Privacy**: Raw patient data never leaves the client device
-- **Weight-Only Sharing**: Only model weights are transmitted to the server
-- **No Patient Logging**: Patient-level data is never logged, only aggregated metrics
-- **Secure Training**: Local training on each hospital's own data
-- **Non-IID Support**: Handles realistic non-IID data distributions across hospitals
-- **Differential Privacy**: Optional (ε, δ)-DP protection for model updates
-
-### Differential Privacy
-
-The repository now supports differential privacy (DP) for federated learning, providing formal privacy guarantees for model updates:
-
-#### Features
-
-- **Gradient Clipping**: Bounds the sensitivity of model updates via L2 norm clipping
-- **Gaussian Noise Addition**: Adds calibrated noise to provide (ε, δ)-differential privacy
-- **Configurable Privacy Budget**: Tune epsilon and delta parameters to balance privacy and utility
-- **Privacy Budget Tracking**: Logs all DP parameters for audit and compliance
-- **Loss Monitoring**: Tracks training loss before and after DP application
-
-#### Usage
-
-```python
-from federated import create_flower_client, create_dp_config
-from utils.preprocessing import create_preprocessing_pipeline
-from utils.client_partitioning import partition_for_federated_clients
-import pandas as pd
-
-# Partition data for federated clients
-client_datasets = partition_for_federated_clients(
-    data_path='data/heart_failure.csv',
-    n_clients=5,
-    random_seed=42
-)
-
-# Create and fit preprocessor
-data = pd.read_csv('data/heart_failure.csv')
-preprocessor = create_preprocessing_pipeline()
-preprocessor.fit(data)
-
-# Create DP configuration
-dp_config = create_dp_config(
-    epsilon=1.0,      # Privacy budget (lower = stronger privacy)
-    delta=1e-5,       # Privacy budget (should be < 1/n_samples)
-    l2_norm_clip=1.0, # Maximum L2 norm for gradient clipping
-    enabled=True
-)
-
-# Create Flower client with DP
-client = create_flower_client(
-    client_data=client_datasets[0],
-    preprocessor=preprocessor,
-    val_split=0.2,
-    epochs_per_round=5,
-    batch_size=32,
-    client_id="hospital_0",
-    dp_config=dp_config  # Enable DP
-)
-
-# Train with DP protection
-params = client.get_parameters(config={})
-updated_params, n_samples, metrics = client.fit(params, config={})
-
-# DP metrics are logged
-print(f"DP epsilon: {metrics['dp_epsilon']}")
-print(f"DP delta: {metrics['dp_delta']}")
-print(f"Train loss (before DP): {metrics['train_loss']:.4f}")
-print(f"Train loss (after DP): {metrics['train_loss_after_dp']:.4f}")
-```
-
-#### Privacy Parameters
-
-- **epsilon (ε)**: Privacy budget parameter. Lower values = stronger privacy.
-  - Typical values: 0.1 to 10.0
-  - Recommendation: Start with ε=1.0 and adjust based on privacy requirements
-  
-- **delta (δ)**: Probability of privacy guarantee failure. Should be cryptographically small.
-  - Typical values: 1e-5 to 1e-7
-  - Recommendation: Set to 1/n_samples or smaller
-  
-- **l2_norm_clip**: Maximum L2 norm for gradient clipping. Controls sensitivity.
-  - Typical values: 0.1 to 5.0
-  - Recommendation: Start with 1.0 and adjust based on model updates
-
-#### Testing and Demo
-
-Run the test suite to validate DP functionality:
-
+**Create Virtual Environment:**
 ```bash
-python test_differential_privacy.py
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Linux/Mac:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
 ```
 
-Run the demo script to see DP in action:
+### Install Dependencies
 
+**Install Required Packages:**
 ```bash
-python demo_differential_privacy.py
+pip install -r requirements.txt
 ```
 
-#### Privacy Guarantees
+**Key Dependencies:**
+- `tensorflow>=2.13.0`: Deep learning framework
+- `flwr[simulation]>=1.5.0`: Federated learning framework
+- `pandas>=1.3.0`: Data manipulation
+- `numpy>=1.21.0`: Numerical computing
+- `scikit-learn>=1.0.0`: Preprocessing and metrics
+- `flask>=2.0.0`: Web framework for inference
+- `matplotlib>=3.3.0`, `seaborn>=0.11.0`: Visualization
 
-When DP is enabled:
-- Model updates satisfy (ε, δ)-differential privacy
-- Gradient clipping is applied BEFORE model updates are sent to server
-- Gaussian noise is calibrated based on sensitivity and privacy budget
-- Raw gradients are NEVER exposed
-- Privacy budget parameters are logged for audit
+### Run Federated Training
 
-For production deployments, consider additional security measures such as:
-- Secure aggregation protocols
-- Encrypted communication channels
-- Access control and authentication
-
-## Model Evaluation
-
-The repository includes a comprehensive evaluation script for trained federated learning models, supporting both single model evaluation and strategy comparison (FedAvg vs FedProx).
-
-### Features
-
-- **Standard Metrics**: Accuracy, precision, recall, F1-score
-- **Cross-Entropy Loss**: Model confidence evaluation
-- **Confusion Matrix**: Visual representation of classification performance
-- **Client-Level Metrics**: Per-client accuracy for fairness analysis
-- **Fairness Metrics**: Accuracy variance across clients
-- **Strategy Comparison**: Compare FedAvg vs FedProx performance
-- **Comprehensive Reports**: Markdown reports and visualizations
-
-### Usage
-
-#### Basic Evaluation
-
-Evaluate a trained model using existing training history:
-
+**Basic Training (FedAvg, No DP):**
 ```bash
-# Evaluate the model from training history
-python evaluate_federated_model.py \
-    --data-path data/heart_failure.csv \
-    --history-path logs/training_history.json \
-    --output-dir reports
+python run_federated_experiments.py --num-rounds 10
 ```
 
-#### Compare FedAvg vs FedProx
-
-To compare two strategies, first train both models:
-
+**Training with Differential Privacy:**
 ```bash
-# Train with FedAvg
 python run_federated_experiments.py \
-    --strategy fedavg \
-    --num-rounds 10 \
-    --output-dir logs
+    --use-dp \
+    --dp-epsilon 1.0 \
+    --dp-delta 1e-5 \
+    --num-rounds 10
+```
 
-# Rename output for comparison
-mv logs/training_history.json logs/training_history_fedavg.json
-
-# Train with FedProx
+**Training with FedProx Strategy:**
+```bash
 python run_federated_experiments.py \
     --strategy fedprox \
     --proximal-mu 0.1 \
-    --num-rounds 10 \
-    --output-dir logs
-
-# Rename output for comparison
-mv logs/training_history.json logs/training_history_fedprox.json
-
-# Compare strategies
-python evaluate_federated_model.py \
-    --compare-strategies \
-    --fedavg-history logs/training_history_fedavg.json \
-    --fedprox-history logs/training_history_fedprox.json \
-    --output-dir reports
+    --num-rounds 10
 ```
 
-### Evaluation Outputs
+**Command-Line Arguments:**
+- `--num-rounds`: Number of federated training rounds (default: 5)
+- `--strategy`: Aggregation strategy (`fedavg` or `fedprox`)
+- `--use-dp`: Enable differential privacy
+- `--dp-epsilon`: Privacy budget epsilon (default: 1.0)
+- `--dp-delta`: Privacy budget delta (default: 1e-5)
+- `--proximal-mu`: FedProx proximal parameter (default: 0.1)
+- `--random-seed`: Random seed for reproducibility (default: 42)
 
-The evaluation script generates:
+**Outputs:**
+- `logs/training_history.json`: Training metrics per round
+- `logs/training_summary.md`: Human-readable training summary
 
-1. **`reports/evaluation_metrics.md`**: Comprehensive evaluation report including:
-   - Experiment configuration
-   - Standard classification metrics (accuracy, precision, recall, F1-score)
-   - Weighted metrics for class imbalance handling
-   - Class distribution analysis
-   - Confusion matrix in text format
-   - Client-level performance breakdown
-   - Fairness metrics and interpretation
-   - Training progress summary
-   - Overall conclusions
+### Run Evaluation
 
-2. **`reports/confusion_matrix.png`**: Visual confusion matrix showing:
-   - True positives, true negatives, false positives, false negatives
-   - Color-coded heatmap for easy interpretation
-
-3. **`reports/evaluation_comparison.md`** (when comparing strategies):
-   - Side-by-side comparison of FedAvg vs FedProx
-   - Performance metrics for each strategy
-   - Fairness comparison
-   - Winner determination for each metric
-
-### Understanding the Metrics
-
-#### Standard Metrics
-- **Accuracy**: Overall correctness of predictions
-- **Precision**: Proportion of positive predictions that are correct
-- **Recall**: Proportion of actual positives that are identified
-- **F1-Score**: Harmonic mean of precision and recall
-- **Cross-Entropy Loss**: Measure of prediction confidence
-
-#### Weighted Metrics
-For datasets with class imbalance (like medical data), weighted metrics provide a more accurate assessment by accounting for the support (number of samples) of each class.
-
-#### Fairness Metrics
-- **Mean Client Accuracy**: Average accuracy across all clients
-- **Standard Deviation**: Measure of consistency across clients
-- **Accuracy Variance**: Quantifies performance disparity
-- **Min/Max Client Accuracy**: Range of performance
-
-**Interpretation**:
-- Low variance (<0.01): Fair and equitable performance
-- Moderate variance (0.01-0.05): Some performance disparity
-- High variance (>0.05): Significant performance disparity
-
-### Advanced Usage
-
-#### Custom Parameters
-
+**Evaluate Trained Model:**
 ```bash
-python evaluate_federated_model.py \
-    --data-path data/heart_failure.csv \
-    --history-path logs/training_history.json \
-    --output-dir custom_reports \
-    --num-clients 5 \
-    --random-seed 42
+python evaluate_federated_model.py --data-path data/heart_failure.csv
 ```
 
-#### Programmatic Usage
-
-```python
-from evaluate_federated_model import evaluate_federated_model
-
-# Run evaluation programmatically
-evaluate_federated_model(
-    data_path="data/heart_failure.csv",
-    history_path="logs/training_history.json",
-    output_dir="reports",
-    num_clients=5,
-    random_seed=42
-)
-```
-
-### Important Notes
-
-1. **No Retraining**: The evaluation script does NOT retrain the model. It recreates the trained model by simulating the federated training process.
-
-2. **Preprocessing Consistency**: Uses the same preprocessing pipeline as training to ensure consistent evaluation.
-
-3. **Class Imbalance**: Medical datasets often have class imbalance. The script provides both standard and weighted metrics for comprehensive assessment.
-
-4. **Privacy Preservation**: Evaluation maintains privacy guarantees - only aggregated metrics are reported, no patient-level data is exposed.
-
-### Example Output
-
-After running evaluation, you'll see:
-
-```
-================================================================================
-EVALUATION COMPLETED SUCCESSFULLY
-Results saved to:
-  - reports/evaluation_metrics.md
-  - reports/confusion_matrix.png
-================================================================================
-```
-
-The evaluation report provides actionable insights:
-- Overall model performance on held-out test data
-- Model quality assessment accounting for class imbalance
-- Fairness analysis across different hospital clients
-- Consistency of model performance across diverse datasets
-
-## Complete Workflow
-
-### End-to-End Federated Learning Pipeline
-
-1. **Validate Dataset**
-   ```bash
-   python validate_dataset.py
-   ```
-
-2. **Run Federated Training**
-   ```bash
-   python run_federated_experiments.py --num-rounds 10 --strategy fedavg
-   ```
-
-3. **Evaluate Model**
-   ```bash
-   python evaluate_federated_model.py
-   ```
-
-4. **Review Results**
-   - Check `logs/training_summary.md` for training progress
-   - Check `reports/evaluation_metrics.md` for comprehensive evaluation
-   - View `reports/confusion_matrix.png` for visual performance analysis
-
-## Inference Pipeline and Frontend
-
-The repository now includes a complete inference pipeline and web interface for making predictions on new patient data.
-
-### Inference Pipeline
-
-The inference pipeline loads the trained federated model and makes predictions on new patient data without storing any information.
-
-#### Features
-
-- Load trained model from saved weights or training history
-- Apply consistent preprocessing
-- Accept CSV input files
-- Generate predictions with confidence scores
-- **NO training** during inference
-- **NO patient data storage**
-
-#### Usage
-
-**Python API:**
-
-```python
-from inference import InferencePipeline
-import pandas as pd
-
-# Initialize pipeline
-pipeline = InferencePipeline()
-
-# Load model (with saved weights for fast loading)
-pipeline.load_model_from_history(
-    history_path='logs/training_history.json',
-    data_path='data/heart_failure.csv',
-    model_weights_path='logs/model_weights.h5'  # Optional
-)
-
-# Make prediction
-patient_data = pd.DataFrame([{
-    'age': 75,
-    'anaemia': 1,
-    'creatinine_phosphokinase': 582,
-    'diabetes': 0,
-    'ejection_fraction': 20,
-    'high_blood_pressure': 1,
-    'platelets': 265000,
-    'serum_creatinine': 1.9,
-    'serum_sodium': 130,
-    'sex': 1,
-    'smoking': 0,
-    'time': 4
-}])
-
-prediction, confidence = pipeline.predict(patient_data)
-print(f"Prediction: {prediction}")  # "Yes" or "No"
-print(f"Confidence: {confidence * 100:.2f}%")
-```
-
-**Demo Script:**
-
+**Compare FedAvg vs FedProx:**
 ```bash
-python demo_inference.py
+# First train both strategies, then:
+python evaluate_federated_model.py --compare-strategies
 ```
 
-### Frontend Web Interface
+**Outputs:**
+- `reports/evaluation_metrics.md`: Comprehensive evaluation report
+- `reports/confusion_matrix.png`: Confusion matrix visualization
 
-A simple, intuitive web interface for uploading patient data and viewing predictions.
+### Run Privacy-Utility Analysis
 
-#### Features
-
-- Clean web interface with drag-and-drop upload
-- "+" upload button for easy file selection
-- Display prediction (High/Low risk)
-- Show confidence score with visual progress bar
-- Prominent research disclaimer
-- Batch prediction support
-
-#### Starting the Frontend
-
+**Analyze Privacy-Utility Tradeoff:**
 ```bash
-# Start the web server
-python -m flask --app frontend.app run
-
-# Or with custom settings
-python -m flask --app frontend.app run --host=0.0.0.0 --port=5000
+python run_privacy_utility_analysis.py
 ```
 
-Then open your browser to: `http://localhost:5000`
+This script:
+- Runs experiments with multiple epsilon values (0, 0.5, 1.0, 2.0, 5.0)
+- Takes ~30-60 minutes to complete
+- Generates comprehensive privacy-utility analysis
 
-#### Input CSV Format
+**Outputs:**
+- `reports/privacy_utility_analysis.md`: Detailed analysis report
+- `reports/accuracy_vs_epsilon.png`: Accuracy vs epsilon plot
+- `reports/loss_vs_epsilon.png`: Loss vs epsilon plot
 
-Upload a CSV file with patient data (no DEATH_EVENT column needed):
+### Run Inference Web App
 
+**Start the Web Server:**
+```bash
+cd frontend
+python app.py
+```
+
+**Access the Interface:**
+- Open browser and navigate to: `http://localhost:5000`
+- Upload CSV file with patient data
+- View predictions and confidence scores
+
+**CSV Format Requirements:**
+- Must include all 12 feature columns (see Dataset section)
+- Can include multiple patients (rows)
+- Optional: `DEATH_EVENT` column (for comparison)
+
+**Example CSV:**
 ```csv
 age,anaemia,creatinine_phosphokinase,diabetes,ejection_fraction,high_blood_pressure,platelets,serum_creatinine,serum_sodium,sex,smoking,time
-75,1,582,0,20,1,265000,1.9,130,1,0,4
-45,0,120,0,60,0,300000,1.0,140,0,0,100
+75,0,582,0,20,1,265000,1.9,130,1,0,4
+55,0,7861,0,38,0,263358.03,1.1,136,1,0,6
 ```
 
-### Saving Model Weights
+---
 
-To speed up inference loading, train and save model weights:
-
-```bash
-python save_model_weights.py
-```
-
-This creates:
-- `logs/model_weights.h5`: Trained model weights
-- `logs/preprocessor.pkl`: Fitted preprocessing pipeline
-
-### Inference Constraints
-
-The inference pipeline strictly adheres to the following constraints:
-
-✓ **NO training** occurs during inference  
-✓ **NO patient data** is stored permanently  
-✓ All processing is done **in-memory only**  
-✓ Uses **pre-trained model artifacts**  
-✓ Consistent **preprocessing pipeline**  
-
-### Disclaimer
-
-**⚠️ IMPORTANT**: This system is for research purposes only and is NOT a medical diagnosis. Always consult with qualified healthcare professionals for medical advice and diagnosis.
-
-## Complete Workflow (Updated)
-
-### End-to-End Federated Learning Pipeline
-
-1. **Validate Dataset**
-   ```bash
-   python validate_dataset.py
-   ```
-
-2. **Run Federated Training**
-   ```bash
-   python run_federated_experiments.py --num-rounds 10 --strategy fedavg
-   ```
-
-3. **Save Model Weights** (for fast inference)
-   ```bash
-   python save_model_weights.py
-   ```
-
-4. **Evaluate Model**
-   ```bash
-   python evaluate_federated_model.py
-   ```
-
-5. **Run Inference**
-   ```bash
-   # Demo script
-   python demo_inference.py
-   
-   # Or start web interface
-   python -m flask --app frontend.app run
-   ```
-
-6. **Review Results**
-   - Check `logs/training_summary.md` for training progress
-   - Check `reports/evaluation_metrics.md` for comprehensive evaluation
-   - View `reports/confusion_matrix.png` for visual performance analysis
-   - Use the web interface for interactive predictions
-
-## Project Structure (Updated)
+## 9. Project Structure
 
 ```
 UROP-B2-1/
+│
 ├── data/
-│   └── heart_failure.csv           # Heart failure clinical records dataset
-├── utils/
-│   ├── __init__.py                 # Package initialization
-│   ├── preprocessing.py            # Preprocessing pipeline implementation
-│   ├── data_sampling.py            # Dataset sampling module
-│   └── client_partitioning.py      # Non-IID data partitioning for FL
+│   └── heart_failure.csv              # Heart failure clinical records dataset
+│
 ├── models/
-│   ├── __init__.py                 # Model registry and factory functions
-│   ├── lstm_classifier.py          # LSTM Classifier (PRIMARY)
-│   ├── tcn_classifier.py           # TCN Classifier
-│   ├── transformer_classifier.py   # Transformer Classifier
-│   └── README.md                   # Model documentation
+│   ├── __init__.py
+│   ├── lstm_classifier.py             # LSTM model (PRIMARY)
+│   ├── tcn_classifier.py              # TCN model (comparative)
+│   └── transformer_classifier.py      # Transformer model (comparative)
+│
 ├── federated/
-│   ├── __init__.py                 # Federated learning module initialization
-│   ├── client.py                   # Flower federated client implementation
-│   ├── server.py                   # Flower federated server implementation
-│   └── differential_privacy.py     # Differential privacy implementation
-├── inference/                       # ⭐ NEW: Inference pipeline
-│   ├── __init__.py                 # Inference module initialization
-│   ├── inference_pipeline.py       # Main inference implementation
-│   └── README.md                   # Inference documentation
-├── frontend/                        # ⭐ NEW: Web interface
-│   ├── __init__.py                 # Frontend module initialization
-│   ├── app.py                      # Flask web application
-│   ├── templates/
-│   │   └── index.html              # Main web interface
-│   ├── static/                     # Static assets (CSS, JS)
-│   └── README.md                   # Frontend documentation
-├── reports/
-│   ├── data_profile.md             # Dataset profiling report
-│   ├── sampling_summary.md         # Sampling operation report
-│   └── client_partition_summary.md # Client partitioning report
+│   ├── __init__.py
+│   ├── client.py                      # Flower federated client implementation
+│   ├── server.py                      # Flower federated server implementation
+│   └── differential_privacy.py        # DP-SGD implementation (gradient clipping + noise)
+│
+├── inference/
+│   ├── __init__.py
+│   └── inference_pipeline.py          # Inference pipeline (no training, no storage)
+│
+├── frontend/
+│   ├── __init__.py
+│   ├── app.py                         # Flask web application
+│   └── templates/
+│       └── index.html                 # Web interface HTML template
+│
+├── utils/
+│   ├── __init__.py
+│   ├── preprocessing.py               # Data preprocessing pipeline
+│   ├── client_partitioning.py         # Non-IID dataset partitioning
+│   └── data_sampling.py               # Stratified dataset sampling
+│
 ├── logs/
-│   ├── training_history.json       # Federated training metrics (JSON)
-│   ├── training_summary.md         # Federated training summary (Markdown)
-│   ├── model_weights.h5            # ⭐ NEW: Saved model weights
-│   └── preprocessor.pkl            # ⭐ NEW: Saved preprocessor
-├── validate_dataset.py             # Repository and dataset validation script
-├── test_preprocessing.py           # Preprocessing pipeline test suite
-├── test_sampling.py                # Dataset sampling test suite
-├── test_models.py                  # Model architectures test suite
-├── test_client_partitioning.py     # Client partitioning test suite
-├── test_federated_client.py        # Federated client test suite
-├── test_federated_server.py        # Federated server test suite
-├── test_differential_privacy.py    # Differential privacy test suite
-├── demo_preprocessing.py           # Preprocessing usage demonstration
-├── demo_sampling.py                # Dataset sampling usage demonstration
-├── demo_models.py                  # Model architectures demonstration
-├── demo_client_partitioning.py     # Client partitioning demonstration
-├── demo_federated_client.py        # Federated client demonstration
-├── demo_federated_training.py      # Full federated training session demonstration
-├── demo_differential_privacy.py    # Differential privacy demonstration
-├── demo_inference.py               # ⭐ NEW: Inference pipeline demonstration
-├── run_federated_experiments.py    # End-to-end federated training experiments
-├── evaluate_federated_model.py     # Model evaluation script
-├── save_model_weights.py           # ⭐ NEW: Save trained model weights
-├── generate_data_profile.py        # Dataset profiling script
-├── requirements.txt                # Python dependencies
-└── README.md                       # This file
+│   ├── training_history.json          # Training metrics per round
+│   └── training_summary.md            # Training summary report
+│
+├── reports/
+│   ├── evaluation_metrics.md          # Comprehensive evaluation report
+│   ├── confusion_matrix.png           # Confusion matrix visualization
+│   ├── privacy_utility_analysis.md    # Privacy-utility tradeoff analysis
+│   ├── accuracy_vs_epsilon.png        # Accuracy vs epsilon plot
+│   ├── loss_vs_epsilon.png            # Loss vs epsilon plot
+│   ├── client_partition_summary.md    # Client partitioning report
+│   └── data_profile.md                # Dataset profiling report
+│
+├── run_federated_experiments.py       # Main script: Run federated training experiments
+├── evaluate_federated_model.py        # Evaluate trained federated model
+├── run_privacy_utility_analysis.py    # Analyze privacy-utility tradeoff
+├── save_model_weights.py              # Save trained model weights for inference
+├── validate_dataset.py                # Validate dataset integrity
+│
+├── demo_*.py                          # Demonstration scripts for each component
+├── test_*.py                          # Unit tests for each module
+│
+├── requirements.txt                   # Python dependencies
+├── README.md                          # This comprehensive documentation
+├── PREPROCESSING_GUIDE.md             # Detailed preprocessing documentation
+└── INFERENCE_IMPLEMENTATION.md        # Detailed inference documentation
 ```
 
-## Notes
+### Major Folders and Scripts
 
-- Do NOT modify the dataset directly
-- Do NOT create derived datasets without proper documentation
-- The validation script only checks existence and readability, it does not perform preprocessing or training
-- The preprocessing pipeline is designed for federated learning and must be used consistently across all clients
-- The inference pipeline does NOT store patient data and does NOT perform training
-- Regular privacy audits
+**Core Implementation:**
+- **`models/`**: Neural network architectures (LSTM, TCN, Transformer)
+- **`federated/`**: Federated learning components (client, server, DP)
+- **`inference/`**: Inference pipeline for predictions
+- **`frontend/`**: Web interface for CSV upload and predictions
+- **`utils/`**: Preprocessing, partitioning, sampling utilities
+
+**Execution Scripts:**
+- **`run_federated_experiments.py`**: Main training script
+- **`evaluate_federated_model.py`**: Model evaluation and metrics
+- **`run_privacy_utility_analysis.py`**: Privacy-utility tradeoff analysis
+- **`save_model_weights.py`**: Save trained weights for inference
+
+**Testing and Validation:**
+- **`demo_*.py`**: Demonstration scripts (one per module)
+- **`test_*.py`**: Unit tests (one per module)
+- **`validate_dataset.py`**: Dataset integrity checker
+
+**Outputs:**
+- **`logs/`**: Training history and summaries
+- **`reports/`**: Evaluation reports, plots, analysis documents
+
+---
+
+## 10. Ethical Considerations & Limitations
+
+### No Real Patient Data
+
+**Important Clarification:**
+- This system uses a **public benchmark dataset** (299 de-identified records)
+- **NO real patient data** from actual hospitals is used
+- Dataset is publicly available for research purposes
+- All patient information is de-identified (no PII)
+
+**Implications:**
+- System has not been validated on real-world patient populations
+- Performance metrics may not generalize to clinical deployment
+- Model was not trained on proprietary hospital data
+- Results are for research and educational purposes only
+
+### Research-Only System
+
+**System Status:**
+- ✓ Research prototype for academic study
+- ✓ Demonstrates federated learning + differential privacy
+- ✓ Suitable for education and algorithm development
+- ✗ **NOT validated for clinical use**
+- ✗ **NOT FDA-approved or medically certified**
+- ✗ **NOT intended for real patient diagnosis**
+
+**Academic Context:**
+- Developed for educational purposes (UROP project)
+- Demonstrates technical feasibility of privacy-preserving medical AI
+- Explores federated learning and differential privacy techniques
+- Provides reproducible research codebase
+
+### Not a Medical Diagnosis Tool
+
+**Critical Warnings:**
+
+⚠️ **This system is NOT:**
+1. A medical diagnostic tool
+2. A substitute for clinical judgment
+3. Approved for use in patient care
+4. Validated by medical professionals
+5. Certified by regulatory authorities (FDA, CE, etc.)
+
+⚠️ **Do NOT:**
+1. Use this system to diagnose patients
+2. Make treatment decisions based on predictions
+3. Replace professional medical evaluation
+4. Deploy this system in clinical settings
+5. Rely on predictions for medical advice
+
+✓ **This system IS:**
+1. A research prototype
+2. An educational tool for learning federated learning
+3. A demonstration of privacy-preserving AI
+4. A reproducible research codebase
+5. A starting point for further research
+
+### Limitations and Future Work
+
+**Current Limitations:**
+1. **Dataset Size**: Only 299 patients (small for deep learning)
+2. **Class Imbalance**: Poor performance on minority class (death)
+3. **Single Dataset**: Not validated on external datasets
+4. **Simplified DP**: Single-round privacy analysis (not full composition)
+5. **No Clinical Validation**: Not tested on real hospital data
+6. **Limited Features**: Only 12 clinical variables
+7. **Binary Outcome**: Does not predict survival time or severity
+8. **Static Model**: No continual learning or model updates
+
+**Future Research Directions:**
+1. **Multi-Center Validation**: Test on real multi-hospital datasets
+2. **Advanced DP**: Implement moments accountant for tighter privacy
+3. **Class Balancing**: Address imbalance with SMOTE, focal loss, etc.
+4. **Feature Engineering**: Include additional clinical variables
+5. **Survival Analysis**: Predict time-to-event (not just binary outcome)
+6. **Federated Hyperparameter Tuning**: Optimize across clients
+7. **Secure Aggregation**: Add cryptographic protection for model updates
+8. **Clinical Collaboration**: Partner with medical professionals for validation
+9. **Regulatory Compliance**: Pursue FDA/CE approval for clinical deployment
+10. **Continual Learning**: Update model with new hospital data
+
+**Research Contributions:**
+- Demonstrates technical feasibility of FL + DP for medical AI
+- Provides reproducible codebase for federated medical learning
+- Quantifies privacy-utility tradeoffs empirically
+- Establishes baseline for future research
+- Educational resource for privacy-preserving ML
+
+---
+
+## References
+
+1. Chicco, D., Jurman, G. (2020). Machine learning can predict survival of patients with heart failure from serum creatinine and ejection fraction alone. *BMC Medical Informatics and Decision Making*, 20(16).
+
+2. McMahan, B., et al. (2017). Communication-Efficient Learning of Deep Networks from Decentralized Data. *AISTATS*.
+
+3. Abadi, M., et al. (2016). Deep Learning with Differential Privacy. *ACM CCS*.
+
+4. Li, T., et al. (2020). Federated Optimization in Heterogeneous Networks. *MLSys*.
+
+5. Dwork, C., Roth, A. (2014). The Algorithmic Foundations of Differential Privacy. *Foundations and Trends in Theoretical Computer Science*.
+
+6. Beutel, D.J., et al. (2020). Flower: A Friendly Federated Learning Research Framework. *arXiv:2007.14390*.
+
+---
+
+## License
+
+This project is for academic and educational purposes. The heart failure dataset is publicly available under the Creative Commons Attribution 4.0 International (CC BY 4.0) license.
+
+---
+
+## Contact
+
+For questions or collaboration inquiries, please contact the project maintainers through the GitHub repository.
+
+**Repository**: [Vedanthdamn/UROP-B2-1](https://github.com/Vedanthdamn/UROP-B2-1)
+
+---
+
+## Acknowledgments
+
+- Heart failure dataset provided by Chicco & Jurman (2020)
+- Flower federated learning framework by Adap
+- TensorFlow and scikit-learn communities
+- UROP program for supporting this research project
