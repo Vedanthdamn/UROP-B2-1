@@ -248,7 +248,6 @@ def run_all_tests():
     
     passed = 0
     failed = 0
-    skipped = 0
     
     for test_name, test_func in tests:
         try:

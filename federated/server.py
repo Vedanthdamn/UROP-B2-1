@@ -226,9 +226,16 @@ class FederatedServer:
             if "dp_enabled" in client_metrics and client_metrics["dp_enabled"]:
                 aggregated["dp_enabled"] = True
                 if "dp_epsilon" in client_metrics:
-                    # Note: In practice, privacy budgets compose.
-                    # This is just logging the epsilon value from clients.
-                    # Proper privacy accounting requires composition analysis.
+                    # Note: In practice, privacy budgets compose across rounds.
+                    # This is just logging the epsilon value from clients for reference.
+                    # For proper privacy accounting in multi-round federated learning:
+                    # 1. Use advanced composition theorems (basic, optimal, or Rényi DP)
+                    # 2. Consider using privacy accounting libraries like:
+                    #    - TensorFlow Privacy's privacy_accountant
+                    #    - Google's differential-privacy library
+                    # 3. Track cumulative privacy loss across all rounds
+                    # WARNING: The current epsilon value does NOT reflect composed privacy
+                    # budget. Total privacy budget degrades with each round of training.
                     aggregated["dp_epsilon"] = float(client_metrics["dp_epsilon"])
                 if "dp_delta" in client_metrics:
                     aggregated["dp_delta"] = float(client_metrics["dp_delta"])
