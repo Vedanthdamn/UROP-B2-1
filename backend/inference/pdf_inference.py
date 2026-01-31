@@ -40,31 +40,30 @@ logger = logging.getLogger(__name__)
 
 class PDFInference:
     """
-    PDF-based inference pipeline for heart disease prediction.
+    PDF-based inference pipeline for heart failure prediction.
     
     This class handles:
     - PDF text extraction (digital + OCR fallback)
     - Rule-based medical value extraction
-    - Feature mapping to Heart Disease UCI schema
+    - Feature mapping to Heart Failure Clinical Records schema
     - Model loading and prediction
     """
     
     # Default values for missing features (documented)
     # Based on typical healthy adult values and dataset statistics
     DEFAULTS = {
-        'age': 60,              # Median age from dataset
-        'sex': 1,               # Male (1) as default
-        'cp': 0,                # Chest pain type: asymptomatic
-        'trestbps': 130,        # Resting blood pressure: normal range
-        'chol': 240,            # Cholesterol: borderline high
-        'fbs': 0,               # Fasting blood sugar: < 120 mg/dl
-        'restecg': 0,           # Resting ECG: normal
-        'thalach': 150,         # Max heart rate: moderate
-        'exang': 0,             # Exercise induced angina: no
-        'oldpeak': 0.0,         # ST depression: none
-        'slope': 1,             # Slope of peak exercise ST: flat
-        'ca': 0,                # Number of major vessels: 0
-        'thal': 2               # Thalassemia: normal
+        'age': 60,                      # Median age from dataset
+        'anaemia': 0,                   # No anaemia (0 = no, 1 = yes)
+        'creatinine_phosphokinase': 250,  # CPK enzyme level (mcg/L)
+        'diabetes': 0,                  # No diabetes (0 = no, 1 = yes)
+        'ejection_fraction': 38,        # Heart ejection fraction percentage
+        'high_blood_pressure': 0,       # No hypertension (0 = no, 1 = yes)
+        'platelets': 263000,            # Platelet count (kiloplatelets/mL)
+        'serum_creatinine': 1.1,        # Serum creatinine level (mg/dL)
+        'serum_sodium': 137,            # Serum sodium level (mEq/L)
+        'sex': 1,                       # Male (1) as default
+        'smoking': 0,                   # Non-smoker (0 = no, 1 = yes)
+        'time': 130                     # Follow-up period days
     }
     
     def __init__(self, model_path: str = None):
@@ -187,10 +186,15 @@ class PDFInference:
         Supported fields (if present in report):
         - age
         - sex (male/female → 1/0)
-        - blood pressure (systolic)
-        - cholesterol
-        - fasting blood sugar
-        - max heart rate
+        - blood pressure (for high_blood_pressure flag)
+        - creatinine
+        - sodium
+        - ejection fraction
+        - CPK (creatinine phosphokinase)
+        - platelets
+        - diabetes (flag)
+        - anaemia (flag)
+        - smoking (flag)
         
         Args:
             text: Extracted text from PDF
@@ -242,62 +246,113 @@ class PDFInference:
                 values['sex'] = 1.0  # Male
                 logger.info(f"Extracted sex: Male (1) - based on frequency")
         
-        # Extract Blood Pressure (systolic)
+        # Extract Blood Pressure (for high_blood_pressure flag)
         bp_patterns = [
-            r'blood\s*pressure[:\s]+(\d{2,3})\s*/\s*\d{2,3}',
-            r'bp[:\s]+(\d{2,3})\s*/\s*\d{2,3}',
+            r'blood\s*pressure[:\s]+(\d{2,3})\s*/\s*(\d{2,3})',
+            r'bp[:\s]+(\d{2,3})\s*/\s*(\d{2,3})',
             r'systolic[:\s]+(\d{2,3})',
-            r'(\d{2,3})\s*/\s*\d{2,3}\s*mmhg',
         ]
         for pattern in bp_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                values['trestbps'] = float(match.group(1))
-                logger.info(f"Extracted blood pressure (systolic): {values['trestbps']}")
+                systolic = float(match.group(1))
+                # High BP if systolic >= 140 or diastolic >= 90
+                values['high_blood_pressure'] = 1.0 if systolic >= 140 else 0.0
+                logger.info(f"Extracted blood pressure (systolic): {systolic} -> high_blood_pressure={values['high_blood_pressure']}")
                 break
         
-        # Extract Cholesterol
-        chol_patterns = [
-            r'cholesterol[:\s]+(\d{2,4})',
-            r'chol[:\s]+(\d{2,4})',
-            r'total\s*cholesterol[:\s]+(\d{2,4})',
-            r'tc[:\s]+(\d{2,4})',
+        # Extract Creatinine
+        creat_patterns = [
+            r'creatinine[:\s]+(\d+\.?\d*)',
+            r'serum\s*creatinine[:\s]+(\d+\.?\d*)',
         ]
-        for pattern in chol_patterns:
+        for pattern in creat_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                values['chol'] = float(match.group(1))
-                logger.info(f"Extracted cholesterol: {values['chol']}")
+                values['serum_creatinine'] = float(match.group(1))
+                logger.info(f"Extracted serum creatinine: {values['serum_creatinine']}")
                 break
         
-        # Extract Fasting Blood Sugar
-        fbs_patterns = [
-            r'fasting\s*blood\s*sugar[:\s]+(\d{2,4})',
-            r'fbs[:\s]+(\d{2,4})',
-            r'fasting\s*glucose[:\s]+(\d{2,4})',
-            r'fpg[:\s]+(\d{2,4})',
+        # Extract Sodium
+        sodium_patterns = [
+            r'sodium[:\s]+(\d{2,3})',
+            r'serum\s*sodium[:\s]+(\d{2,3})',
+            r'na[:\s]+(\d{2,3})',
         ]
-        for pattern in fbs_patterns:
+        for pattern in sodium_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                fbs_value = float(match.group(1))
-                # Convert to binary: > 120 mg/dl = 1, else 0
-                values['fbs'] = 1.0 if fbs_value > 120 else 0.0
-                logger.info(f"Extracted fasting blood sugar: {fbs_value} mg/dl -> {values['fbs']}")
+                values['serum_sodium'] = float(match.group(1))
+                logger.info(f"Extracted serum sodium: {values['serum_sodium']}")
                 break
         
-        # Extract Max Heart Rate
-        hr_patterns = [
-            r'max(?:imum)?\s*heart\s*rate[:\s]+(\d{2,3})',
-            r'max\s*hr[:\s]+(\d{2,3})',
-            r'heart\s*rate\s*max[:\s]+(\d{2,3})',
-            r'thalach[:\s]+(\d{2,3})',
+        # Extract Ejection Fraction
+        ef_patterns = [
+            r'ejection\s*fraction[:\s]+(\d{1,3})',
+            r'ef[:\s]+(\d{1,3})(?:\%|percent)?',  # Make suffix optional
         ]
-        for pattern in hr_patterns:
+        for pattern in ef_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                values['thalach'] = float(match.group(1))
-                logger.info(f"Extracted max heart rate: {values['thalach']}")
+                values['ejection_fraction'] = float(match.group(1))
+                logger.info(f"Extracted ejection fraction: {values['ejection_fraction']}")
+                break
+        
+        # Extract CPK (Creatinine Phosphokinase)
+        cpk_patterns = [
+            r'cpk[:\s]+(\d{2,5})',
+            r'creatinine\s*phosphokinase[:\s]+(\d{2,5})',
+        ]
+        for pattern in cpk_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                values['creatinine_phosphokinase'] = float(match.group(1))
+                logger.info(f"Extracted CPK: {values['creatinine_phosphokinase']}")
+                break
+        
+        # Extract Platelets
+        platelet_patterns = [
+            r'platelet[s]?[:\s]+(\d{3,7})',
+            r'plt[:\s]+(\d{3,7})',
+        ]
+        for pattern in platelet_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                values['platelets'] = float(match.group(1))
+                logger.info(f"Extracted platelets: {values['platelets']}")
+                break
+        
+        # Extract Diabetes flag
+        diabetes_patterns = [
+            r'\b(?:diabetes|diabetic)\b',
+        ]
+        for pattern in diabetes_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                values['diabetes'] = 1.0
+                logger.info(f"Detected diabetes: {values['diabetes']}")
+                break
+        
+        # Extract Anaemia flag
+        anaemia_patterns = [
+            r'\b(?:an[ae]mia|an[ae]mic)\b',
+        ]
+        for pattern in anaemia_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                values['anaemia'] = 1.0
+                logger.info(f"Detected anaemia: {values['anaemia']}")
+                break
+        
+        # Extract Smoking flag
+        smoking_patterns = [
+            r'\b(?:smok(?:er|ing)|tobacco)\b',
+        ]
+        for pattern in smoking_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                values['smoking'] = 1.0
+                logger.info(f"Detected smoking: {values['smoking']}")
                 break
         
         logger.info(f"Extracted {len(values)} values from PDF")
@@ -305,22 +360,21 @@ class PDFInference:
     
     def map_to_uci_schema(self, extracted_values: Dict[str, Optional[float]]) -> np.ndarray:
         """
-        Map extracted values to Heart Disease UCI schema.
+        Map extracted values to Heart Failure Clinical Records schema.
         
-        Heart Disease UCI dataset has 13 features:
+        Heart Failure dataset has 12 features (excluding DEATH_EVENT target):
         1. age: Age in years
-        2. sex: Sex (1 = male, 0 = female)
-        3. cp: Chest pain type (0-3)
-        4. trestbps: Resting blood pressure (mm Hg)
-        5. chol: Serum cholesterol (mg/dl)
-        6. fbs: Fasting blood sugar > 120 mg/dl (1 = true, 0 = false)
-        7. restecg: Resting ECG results (0-2)
-        8. thalach: Maximum heart rate achieved
-        9. exang: Exercise induced angina (1 = yes, 0 = no)
-        10. oldpeak: ST depression induced by exercise
-        11. slope: Slope of peak exercise ST segment (0-2)
-        12. ca: Number of major vessels colored by fluoroscopy (0-3)
-        13. thal: Thalassemia (1 = normal, 2 = fixed defect, 3 = reversible defect)
+        2. anaemia: Decrease of red blood cells or hemoglobin (0 = no, 1 = yes)
+        3. creatinine_phosphokinase: Level of CPK enzyme in blood (mcg/L)
+        4. diabetes: If the patient has diabetes (0 = no, 1 = yes)
+        5. ejection_fraction: Percentage of blood leaving the heart at each contraction
+        6. high_blood_pressure: If the patient has hypertension (0 = no, 1 = yes)
+        7. platelets: Platelet count in blood (kiloplatelets/mL)
+        8. serum_creatinine: Level of serum creatinine in blood (mg/dL)
+        9. serum_sodium: Level of serum sodium in blood (mEq/L)
+        10. sex: Woman (0) or man (1)
+        11. smoking: If the patient smokes (0 = no, 1 = yes)
+        12. time: Follow-up period (days)
         
         Missing values are filled with documented defaults from self.DEFAULTS.
         
@@ -328,14 +382,15 @@ class PDFInference:
             extracted_values: Dictionary of extracted medical values
             
         Returns:
-            numpy array of shape (1, 13) ready for model input
+            numpy array of shape (1, 1, 12) ready for model input (LSTM format)
         """
-        logger.info("Mapping extracted values to UCI Heart Disease schema...")
+        logger.info("Mapping extracted values to Heart Failure schema...")
         
         # Create feature vector using extracted values or defaults
         features = []
-        feature_names = ['age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 
-                        'restecg', 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal']
+        feature_names = ['age', 'anaemia', 'creatinine_phosphokinase', 'diabetes', 
+                        'ejection_fraction', 'high_blood_pressure', 'platelets', 
+                        'serum_creatinine', 'serum_sodium', 'sex', 'smoking', 'time']
         
         for feature_name in feature_names:
             if feature_name in extracted_values and extracted_values[feature_name] is not None:
@@ -347,11 +402,12 @@ class PDFInference:
                 features.append(value)
                 logger.info(f"  {feature_name}: {value} (default)")
         
-        # Convert to numpy array with shape (1, 13)
-        feature_array = np.array(features, dtype=np.float32).reshape(1, -1)
+        # Convert to numpy array with shape (1, 1, 12) for LSTM input
+        # Shape: (batch_size=1, time_steps=1, features=12) - LSTM expects 3D input
+        feature_array = np.array(features, dtype=np.float32).reshape(1, 1, -1)
         
         logger.info(f"Feature vector shape: {feature_array.shape}")
-        logger.info(f"Feature vector: {feature_array[0]}")
+        logger.info(f"Feature vector: {feature_array[0][0]}")
         
         return feature_array
     
@@ -360,7 +416,7 @@ class PDFInference:
         Run prediction using the trained model.
         
         Args:
-            features: numpy array of shape (1, 13)
+            features: numpy array of shape (1, 1, 12)
             
         Returns:
             Tuple of (label, probability)
@@ -376,8 +432,8 @@ class PDFInference:
         prediction_proba = self.model.predict(features, verbose=0)
         probability = float(prediction_proba[0][0])
         
-        # Convert to label
-        label = "Disease" if probability >= 0.5 else "No Disease"
+        # Convert to label - use consistent format with API
+        label = "HIGH RISK" if probability >= 0.5 else "LOW RISK"
         
         logger.info(f"Prediction: {label}")
         logger.info(f"Probability: {probability:.4f}")

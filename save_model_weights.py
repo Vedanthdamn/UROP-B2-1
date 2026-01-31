@@ -52,7 +52,7 @@ def main():
     random_seed = 42
     
     # Output paths
-    weights_path = 'logs/model_weights.h5'
+    weights_path = 'logs/model_weights.weights.h5'
     preprocessor_path = 'logs/preprocessor.pkl'
     
     # Load and prepare data

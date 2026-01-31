@@ -918,15 +918,21 @@ This repository includes a **separate, offline inference pipeline** that allows 
    - Supported fields (if present in report):
      - Age
      - Sex (male/female → 1/0)
-     - Blood pressure (systolic)
-     - Cholesterol
-     - Fasting blood sugar
-     - Max heart rate
+     - Blood pressure (for high_blood_pressure flag)
+     - Creatinine (serum_creatinine)
+     - Sodium (serum_sodium)
+     - Ejection fraction
+     - CPK (creatinine phosphokinase)
+     - Platelets
+     - Diabetes (flag)
+     - Anaemia (flag)
+     - Smoking (flag)
 
-3. **Heart Disease UCI Schema Mapping**:
-   - Maps extracted values to 13-feature vector
+3. **Heart Failure Clinical Records Schema Mapping**:
+   - Maps extracted values to 12-feature vector
    - Missing values filled with documented defaults
    - Comments explain each default value
+   - Features match the training dataset schema
 
 4. **Model Loading**:
    - Loads trained model from `backend/inference/global_model.h5`
@@ -934,16 +940,17 @@ This repository includes a **separate, offline inference pipeline** that allows 
    - Clear error if model is missing
 
 5. **Prediction**:
-   - Binary classification (Disease / No Disease)
+   - Binary classification (Death Event Risk: HIGH / LOW)
    - Outputs probability and label
    - Minimal logging of intermediate steps
+   - Web UI displays results with confidence scores
 
 ### Installation
 
-Install additional dependencies for PDF inference:
+Install all dependencies including those for PDF inference and web UI:
 
 ```bash
-pip install pdfplumber pytesseract Pillow
+pip install -r requirements.txt
 
 # For OCR support (pytesseract), also install tesseract binary:
 # Ubuntu/Debian:
@@ -957,26 +964,55 @@ brew install tesseract
 
 ### Usage
 
-**Step 1**: Train the federated model (already implemented):
+#### Option 1: Web UI (Recommended for Faculty Demo)
+
+**Step 1**: Generate the trained model:
 
 ```bash
-python run_federated_experiments.py
+python save_model_weights.py
 ```
 
-**Step 2**: Save the trained global model:
+This will create `backend/inference/global_model.h5` with a trained federated model.
+
+**Step 2**: Start the FastAPI inference server:
 
 ```bash
-# After training, save model to the inference directory
-# (You'll need to copy/save your trained model to backend/inference/global_model.h5)
+python backend/inference/api.py
 ```
 
-**Step 3**: Run inference on a PDF blood report:
+The API will be available at `http://localhost:8000` with interactive documentation at `http://localhost:8000/docs`.
+
+**Step 3**: Start the web frontend:
+
+```bash
+python frontend/app.py
+```
+
+The web UI will be available at `http://localhost:5000`.
+
+**Step 4**: Upload a PDF blood report through the web interface:
+
+1. Open `http://localhost:5000` in your browser
+2. Select "PDF Blood Report" option
+3. Upload a PDF file
+4. Click "Analyze Report"
+5. View the prediction and confidence score
+
+**Screenshots:**
+
+![Initial UI - CSV Mode](https://github.com/user-attachments/assets/afa7e389-adb5-4e8a-8a39-d0d23e7f9d06)
+
+![PDF Upload Mode](https://github.com/user-attachments/assets/1fb1c9d1-7723-4731-a85a-f4ac66c8baf1)
+
+#### Option 2: Command-Line Interface
+
+For testing or batch processing, you can use the CLI directly:
 
 ```bash
 python backend/inference/pdf_inference.py path/to/blood_report.pdf
 ```
 
-**Example Output:**
+**Example Output (CLI):**
 
 ```
 ================================================================================
@@ -997,28 +1033,57 @@ Processing: sample_report.pdf
 2024-01-31 12:00:02 - INFO - Extracted cholesterol: 250.0
 2024-01-31 12:00:02 - INFO - Extracted 4 values from PDF
 
-2024-01-31 12:00:02 - INFO - Mapping extracted values to UCI Heart Disease schema...
+2024-01-31 12:00:02 - INFO - Mapping extracted values to Heart Failure schema...
 2024-01-31 12:00:02 - INFO -   age: 65.0 (extracted)
 2024-01-31 12:00:02 - INFO -   sex: 1.0 (extracted)
-2024-01-31 12:00:02 - INFO -   cp: 0 (default)
-2024-01-31 12:00:02 - INFO -   trestbps: 140.0 (extracted)
-2024-01-31 12:00:02 - INFO -   chol: 250.0 (extracted)
+2024-01-31 12:00:02 - INFO -   high_blood_pressure: 1.0 (extracted)
+2024-01-31 12:00:02 - INFO -   anaemia: 0 (default)
 ...
 
 2024-01-31 12:00:03 - INFO - Running prediction...
-2024-01-31 12:00:03 - INFO - Prediction: Disease
-2024-01-31 12:00:03 - INFO - Probability: 0.7234
+2024-01-31 12:00:03 - INFO - Prediction: Death Event Risk: LOW
+2024-01-31 12:00:03 - INFO - Probability: 0.3828
 
 ================================================================================
 RESULTS
 ================================================================================
-Prediction: Disease
-Probability: 72.34%
+Prediction: Death Event Risk: LOW
+Probability: 38.28%
 
 ⚠️  DISCLAIMER: This is a research demonstration, NOT a medical device.
    Always consult qualified healthcare professionals for medical advice.
 ================================================================================
 ```
+
+**Example API Response:**
+
+```json
+{
+  "success": true,
+  "prediction": "LOW RISK",
+  "prediction_label": "Death Event Risk: LOW",
+  "probability": 0.3828,
+  "probability_percentage": 38.28,
+  "extracted_values": {
+    "age": 65.0,
+    "sex": 1.0,
+    "high_blood_pressure": 1.0
+  },
+  "disclaimer": "⚠️ This is a research demonstration, NOT a medical device. Always consult qualified healthcare professionals for medical advice."
+}
+```
+
+### API Endpoints
+
+The FastAPI server (`backend/inference/api.py`) provides the following endpoints:
+
+- **GET /** - API information and available endpoints
+- **GET /health** - Health check endpoint
+- **POST /predict** - Upload PDF and receive prediction
+  - Accepts: multipart/form-data with PDF file
+  - Returns: JSON with prediction, probability, and extracted values
+
+Interactive API documentation is available at `http://localhost:8000/docs` when the server is running.
 
 ### What This Is NOT
 
@@ -1044,10 +1109,11 @@ Probability: 72.34%
 ### Limitations
 
 1. **Fixed Report Format**: The rule-based extraction expects specific patterns in the PDF
-2. **Limited Field Support**: Only extracts 6 fields; remaining 7 fields use defaults
+2. **Limited Field Support**: Only extracts available fields; remaining fields use defaults
 3. **No Contextual Understanding**: Uses simple regex, not semantic analysis
 4. **Not Clinically Validated**: Extraction accuracy depends on PDF format
 5. **Research Demo Only**: Not suitable for real medical decision-making
+6. **LSTM Model**: Requires specific input shape (1, 1, 12) for time-series format
 
 ### Future Enhancements (Out of Scope for Current Demo)
 
