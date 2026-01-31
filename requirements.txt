@@ -5,3 +5,4 @@ flwr[simulation]>=1.5.0
 scikit-learn>=1.0.0
 matplotlib>=3.3.0
 seaborn>=0.11.0
+flask>=2.0.0
