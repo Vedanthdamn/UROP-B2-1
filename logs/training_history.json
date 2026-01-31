@@ -13,40 +13,40 @@
     "model": "LSTM (PRIMARY)",
     "data_partitioning": "Non-IID"
   },
-  "timestamp": "2026-01-31T04:40:28.495605",
+  "timestamp": "2026-01-31T04:44:24.033809",
   "rounds": [
     {
       "round": 1,
-      "global_loss": 0.6858252913010221,
-      "global_accuracy": 0.5504201665645888,
+      "global_loss": 0.6616520438374591,
+      "global_accuracy": 0.6638655311921065,
       "participating_clients": 5,
       "total_samples": 238
     },
     {
       "round": 2,
-      "global_loss": 0.6770680378965972,
-      "global_accuracy": 0.6176470500581405,
+      "global_loss": 0.6534697543673154,
+      "global_accuracy": 0.6974789895931212,
       "participating_clients": 5,
       "total_samples": 238
     },
     {
       "round": 3,
-      "global_loss": 0.6647953618975246,
-      "global_accuracy": 0.6638655522290398,
+      "global_loss": 0.6395629857267653,
+      "global_accuracy": 0.7689075595190547,
       "participating_clients": 5,
       "total_samples": 238
     },
     {
       "round": 4,
-      "global_loss": 0.65592572042922,
-      "global_accuracy": 0.6848739340525716,
+      "global_loss": 0.621183971647455,
+      "global_accuracy": 0.7941176405473918,
       "participating_clients": 5,
       "total_samples": 238
     },
     {
       "round": 5,
-      "global_loss": 0.6418217450630765,
-      "global_accuracy": 0.7563025285215939,
+      "global_loss": 0.6142547075487986,
+      "global_accuracy": 0.7689075640269689,
       "participating_clients": 5,
       "total_samples": 238
     }

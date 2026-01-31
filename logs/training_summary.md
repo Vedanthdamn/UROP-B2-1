@@ -1,6 +1,6 @@
 # Federated Training Experiment Summary
 
-**Generated:** 2026-01-31 04:40:28
+**Generated:** 2026-01-31 04:44:24
 
 ---
 
@@ -18,23 +18,23 @@
 
 | Round | Global Loss | Global Accuracy | Participating Clients | Total Samples |
 |-------|-------------|-----------------|----------------------|---------------|
-| 1 | 0.6858 | 0.5504 | 5 | 238 |
-| 2 | 0.6771 | 0.6176 | 5 | 238 |
-| 3 | 0.6648 | 0.6639 | 5 | 238 |
-| 4 | 0.6559 | 0.6849 | 5 | 238 |
-| 5 | 0.6418 | 0.7563 | 5 | 238 |
+| 1 | 0.6617 | 0.6639 | 5 | 238 |
+| 2 | 0.6535 | 0.6975 | 5 | 238 |
+| 3 | 0.6396 | 0.7689 | 5 | 238 |
+| 4 | 0.6212 | 0.7941 | 5 | 238 |
+| 5 | 0.6143 | 0.7689 | 5 | 238 |
 
 ## Training Summary
 
-- **Initial Loss:** 0.6858
-- **Final Loss:** 0.6418
-- **Loss Reduction:** 0.0440
-- **Average Loss:** 0.6651
+- **Initial Loss:** 0.6617
+- **Final Loss:** 0.6143
+- **Loss Reduction:** 0.0474
+- **Average Loss:** 0.6380
 
-- **Initial Accuracy:** 0.5504
-- **Final Accuracy:** 0.7563
-- **Accuracy Improvement:** 0.2059
-- **Average Accuracy:** 0.6546
+- **Initial Accuracy:** 0.6639
+- **Final Accuracy:** 0.7689
+- **Accuracy Improvement:** 0.1050
+- **Average Accuracy:** 0.7387
 
 ## Privacy Guarantees
 
