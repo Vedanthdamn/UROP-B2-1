@@ -944,4 +944,240 @@ The evaluation report provides actionable insights:
    - Check `logs/training_summary.md` for training progress
    - Check `reports/evaluation_metrics.md` for comprehensive evaluation
    - View `reports/confusion_matrix.png` for visual performance analysis
+
+## Inference Pipeline and Frontend
+
+The repository now includes a complete inference pipeline and web interface for making predictions on new patient data.
+
+### Inference Pipeline
+
+The inference pipeline loads the trained federated model and makes predictions on new patient data without storing any information.
+
+#### Features
+
+- Load trained model from saved weights or training history
+- Apply consistent preprocessing
+- Accept CSV input files
+- Generate predictions with confidence scores
+- **NO training** during inference
+- **NO patient data storage**
+
+#### Usage
+
+**Python API:**
+
+```python
+from inference import InferencePipeline
+import pandas as pd
+
+# Initialize pipeline
+pipeline = InferencePipeline()
+
+# Load model (with saved weights for fast loading)
+pipeline.load_model_from_history(
+    history_path='logs/training_history.json',
+    data_path='data/heart_failure.csv',
+    model_weights_path='logs/model_weights.h5'  # Optional
+)
+
+# Make prediction
+patient_data = pd.DataFrame([{
+    'age': 75,
+    'anaemia': 1,
+    'creatinine_phosphokinase': 582,
+    'diabetes': 0,
+    'ejection_fraction': 20,
+    'high_blood_pressure': 1,
+    'platelets': 265000,
+    'serum_creatinine': 1.9,
+    'serum_sodium': 130,
+    'sex': 1,
+    'smoking': 0,
+    'time': 4
+}])
+
+prediction, confidence = pipeline.predict(patient_data)
+print(f"Prediction: {prediction}")  # "Yes" or "No"
+print(f"Confidence: {confidence * 100:.2f}%")
+```
+
+**Demo Script:**
+
+```bash
+python demo_inference.py
+```
+
+### Frontend Web Interface
+
+A simple, intuitive web interface for uploading patient data and viewing predictions.
+
+#### Features
+
+- Clean web interface with drag-and-drop upload
+- "+" upload button for easy file selection
+- Display prediction (High/Low risk)
+- Show confidence score with visual progress bar
+- Prominent research disclaimer
+- Batch prediction support
+
+#### Starting the Frontend
+
+```bash
+# Start the web server
+python -m flask --app frontend.app run
+
+# Or with custom settings
+python -m flask --app frontend.app run --host=0.0.0.0 --port=5000
+```
+
+Then open your browser to: `http://localhost:5000`
+
+#### Input CSV Format
+
+Upload a CSV file with patient data (no DEATH_EVENT column needed):
+
+```csv
+age,anaemia,creatinine_phosphokinase,diabetes,ejection_fraction,high_blood_pressure,platelets,serum_creatinine,serum_sodium,sex,smoking,time
+75,1,582,0,20,1,265000,1.9,130,1,0,4
+45,0,120,0,60,0,300000,1.0,140,0,0,100
+```
+
+### Saving Model Weights
+
+To speed up inference loading, train and save model weights:
+
+```bash
+python save_model_weights.py
+```
+
+This creates:
+- `logs/model_weights.h5`: Trained model weights
+- `logs/preprocessor.pkl`: Fitted preprocessing pipeline
+
+### Inference Constraints
+
+The inference pipeline strictly adheres to the following constraints:
+
+✓ **NO training** occurs during inference  
+✓ **NO patient data** is stored permanently  
+✓ All processing is done **in-memory only**  
+✓ Uses **pre-trained model artifacts**  
+✓ Consistent **preprocessing pipeline**  
+
+### Disclaimer
+
+**⚠️ IMPORTANT**: This system is for research purposes only and is NOT a medical diagnosis. Always consult with qualified healthcare professionals for medical advice and diagnosis.
+
+## Complete Workflow (Updated)
+
+### End-to-End Federated Learning Pipeline
+
+1. **Validate Dataset**
+   ```bash
+   python validate_dataset.py
+   ```
+
+2. **Run Federated Training**
+   ```bash
+   python run_federated_experiments.py --num-rounds 10 --strategy fedavg
+   ```
+
+3. **Save Model Weights** (for fast inference)
+   ```bash
+   python save_model_weights.py
+   ```
+
+4. **Evaluate Model**
+   ```bash
+   python evaluate_federated_model.py
+   ```
+
+5. **Run Inference**
+   ```bash
+   # Demo script
+   python demo_inference.py
+   
+   # Or start web interface
+   python -m flask --app frontend.app run
+   ```
+
+6. **Review Results**
+   - Check `logs/training_summary.md` for training progress
+   - Check `reports/evaluation_metrics.md` for comprehensive evaluation
+   - View `reports/confusion_matrix.png` for visual performance analysis
+   - Use the web interface for interactive predictions
+
+## Project Structure (Updated)
+
+```
+UROP-B2-1/
+├── data/
+│   └── heart_failure.csv           # Heart failure clinical records dataset
+├── utils/
+│   ├── __init__.py                 # Package initialization
+│   ├── preprocessing.py            # Preprocessing pipeline implementation
+│   ├── data_sampling.py            # Dataset sampling module
+│   └── client_partitioning.py      # Non-IID data partitioning for FL
+├── models/
+│   ├── __init__.py                 # Model registry and factory functions
+│   ├── lstm_classifier.py          # LSTM Classifier (PRIMARY)
+│   ├── tcn_classifier.py           # TCN Classifier
+│   ├── transformer_classifier.py   # Transformer Classifier
+│   └── README.md                   # Model documentation
+├── federated/
+│   ├── __init__.py                 # Federated learning module initialization
+│   ├── client.py                   # Flower federated client implementation
+│   ├── server.py                   # Flower federated server implementation
+│   └── differential_privacy.py     # Differential privacy implementation
+├── inference/                       # ⭐ NEW: Inference pipeline
+│   ├── __init__.py                 # Inference module initialization
+│   ├── inference_pipeline.py       # Main inference implementation
+│   └── README.md                   # Inference documentation
+├── frontend/                        # ⭐ NEW: Web interface
+│   ├── __init__.py                 # Frontend module initialization
+│   ├── app.py                      # Flask web application
+│   ├── templates/
+│   │   └── index.html              # Main web interface
+│   ├── static/                     # Static assets (CSS, JS)
+│   └── README.md                   # Frontend documentation
+├── reports/
+│   ├── data_profile.md             # Dataset profiling report
+│   ├── sampling_summary.md         # Sampling operation report
+│   └── client_partition_summary.md # Client partitioning report
+├── logs/
+│   ├── training_history.json       # Federated training metrics (JSON)
+│   ├── training_summary.md         # Federated training summary (Markdown)
+│   ├── model_weights.h5            # ⭐ NEW: Saved model weights
+│   └── preprocessor.pkl            # ⭐ NEW: Saved preprocessor
+├── validate_dataset.py             # Repository and dataset validation script
+├── test_preprocessing.py           # Preprocessing pipeline test suite
+├── test_sampling.py                # Dataset sampling test suite
+├── test_models.py                  # Model architectures test suite
+├── test_client_partitioning.py     # Client partitioning test suite
+├── test_federated_client.py        # Federated client test suite
+├── test_federated_server.py        # Federated server test suite
+├── test_differential_privacy.py    # Differential privacy test suite
+├── demo_preprocessing.py           # Preprocessing usage demonstration
+├── demo_sampling.py                # Dataset sampling usage demonstration
+├── demo_models.py                  # Model architectures demonstration
+├── demo_client_partitioning.py     # Client partitioning demonstration
+├── demo_federated_client.py        # Federated client demonstration
+├── demo_federated_training.py      # Full federated training session demonstration
+├── demo_differential_privacy.py    # Differential privacy demonstration
+├── demo_inference.py               # ⭐ NEW: Inference pipeline demonstration
+├── run_federated_experiments.py    # End-to-end federated training experiments
+├── evaluate_federated_model.py     # Model evaluation script
+├── save_model_weights.py           # ⭐ NEW: Save trained model weights
+├── generate_data_profile.py        # Dataset profiling script
+├── requirements.txt                # Python dependencies
+└── README.md                       # This file
+```
+
+## Notes
+
+- Do NOT modify the dataset directly
+- Do NOT create derived datasets without proper documentation
+- The validation script only checks existence and readability, it does not perform preprocessing or training
+- The preprocessing pipeline is designed for federated learning and must be used consistently across all clients
+- The inference pipeline does NOT store patient data and does NOT perform training
 - Regular privacy audits
