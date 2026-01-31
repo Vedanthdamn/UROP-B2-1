@@ -147,8 +147,10 @@ def run_single_epsilon_experiment(
             results["final_accuracy"] = float(train_accuracy[-1][1])
     
     # Calculate client accuracy variance (fairness metric)
-    # We'll evaluate each client on their validation set after the final round
-    # to measure fairness across clients
+    # We evaluate each client on their validation set after the final round
+    # to measure fairness across clients.
+    # Note: Client instances are created here for evaluation only (once per epsilon),
+    # which is acceptable for this analysis use case.
     client_accuracies = []
     for client_id in range(num_clients):
         client = client_fn(str(client_id))
@@ -377,9 +379,9 @@ def generate_analysis_report(results: List[Dict], output_path: str, config: Dict
     # Recommendations
     lines.append("## Recommendations\n")
     lines.append("Based on the privacy-utility analysis:\n")
-    lines.append("1. **For maximum utility:** Use higher epsilon (ε ≥ 3.0) or no DP if privacy is not a concern")
+    lines.append("1. **For maximum utility:** Use higher epsilon (ε ≥ 5.0) or no DP if privacy is not a concern")
     lines.append("2. **For balanced trade-off:** Use moderate epsilon (ε = 1.0 - 2.0)")
-    lines.append("3. **For strong privacy:** Use low epsilon (ε < 1.0), accepting potential utility loss")
+    lines.append("3. **For strong privacy:** Use low epsilon (ε ≤ 0.5), accepting potential utility loss")
     lines.append("4. **Consider fairness:** Choose epsilon that minimizes client accuracy variance")
     lines.append("")
     
