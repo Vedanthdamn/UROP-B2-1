@@ -214,18 +214,22 @@ def compute_standard_metrics(
     y_test_flat = y_test.flatten()
     
     # Compute metrics with explicit average='binary' for binary classification
+    # Use common parameters to avoid repetition
+    binary_kwargs = {'average': 'binary', 'zero_division': 0}
+    weighted_kwargs = {'average': 'weighted', 'zero_division': 0}
+    
     metrics = {
         'accuracy': accuracy_score(y_test_flat, y_pred),
-        'precision': precision_score(y_test_flat, y_pred, average='binary', zero_division=0),
-        'recall': recall_score(y_test_flat, y_pred, average='binary', zero_division=0),
-        'f1_score': f1_score(y_test_flat, y_pred, average='binary', zero_division=0),
+        'precision': precision_score(y_test_flat, y_pred, **binary_kwargs),
+        'recall': recall_score(y_test_flat, y_pred, **binary_kwargs),
+        'f1_score': f1_score(y_test_flat, y_pred, **binary_kwargs),
         'cross_entropy_loss': log_loss(y_test_flat, y_pred_proba)
     }
     
     # Add weighted metrics for better handling of class imbalance
-    metrics['precision_weighted'] = precision_score(y_test_flat, y_pred, average='weighted', zero_division=0)
-    metrics['recall_weighted'] = recall_score(y_test_flat, y_pred, average='weighted', zero_division=0)
-    metrics['f1_weighted'] = f1_score(y_test_flat, y_pred, average='weighted', zero_division=0)
+    metrics['precision_weighted'] = precision_score(y_test_flat, y_pred, **weighted_kwargs)
+    metrics['recall_weighted'] = recall_score(y_test_flat, y_pred, **weighted_kwargs)
+    metrics['f1_weighted'] = f1_score(y_test_flat, y_pred, **weighted_kwargs)
     
     # Add class distribution info
     unique, counts = np.unique(y_test_flat, return_counts=True)
@@ -428,10 +432,13 @@ def generate_evaluation_report(
     # Confusion Matrix
     lines.append("### Confusion Matrix\n")
     lines.append("```")
+    # Calculate dynamic width based on maximum value in confusion matrix
+    max_val = max(confusion_mat[0,0], confusion_mat[0,1], confusion_mat[1,0], confusion_mat[1,1])
+    col_width = max(4, len(str(max_val)))
     lines.append(f"                 Predicted")
     lines.append(f"              Survived  Death")
-    lines.append(f"Actual Survived   {confusion_mat[0,0]:>4d}    {confusion_mat[0,1]:>4d}")
-    lines.append(f"       Death      {confusion_mat[1,0]:>4d}    {confusion_mat[1,1]:>4d}")
+    lines.append(f"Actual Survived   {confusion_mat[0,0]:>{col_width}d}    {confusion_mat[0,1]:>{col_width}d}")
+    lines.append(f"       Death      {confusion_mat[1,0]:>{col_width}d}    {confusion_mat[1,1]:>{col_width}d}")
     lines.append("```")
     lines.append("")
     lines.append("See `confusion_matrix.png` for visualization.\n")
@@ -465,25 +472,27 @@ def generate_evaluation_report(
     # Training Summary Statistics
     lines.append("## Training Summary\n")
     
-    if hasattr(history, 'metrics_distributed_fit') and history.metrics_distributed_fit:
-        train_loss = history.metrics_distributed_fit.get('train_loss', [])
-        train_accuracy = history.metrics_distributed_fit.get('train_accuracy', [])
-        
-        if train_loss:
-            losses = [loss[1] for loss in train_loss]
-            lines.append(f"- **Initial Loss:** {losses[0]:.4f}")
-            lines.append(f"- **Final Loss:** {losses[-1]:.4f}")
-            lines.append(f"- **Loss Reduction:** {losses[0] - losses[-1]:.4f}")
-            lines.append(f"- **Average Loss:** {np.mean(losses):.4f}")
+    # Check if training history data exists (history is a dict from JSON)
+    if 'rounds' in history and history['rounds']:
+        rounds = history['rounds']
+        if rounds and len(rounds) > 0:
+            first_round = rounds[0]
+            last_round = rounds[-1]
+            
+            # Extract metrics with safe defaults
+            if 'global_accuracy' in first_round and 'global_accuracy' in last_round:
+                lines.append(f"- **Initial Training Accuracy:** {first_round['global_accuracy']:.4f}")
+                lines.append(f"- **Final Training Accuracy:** {last_round['global_accuracy']:.4f}")
+                lines.append(f"- **Accuracy Improvement:** {last_round['global_accuracy'] - first_round['global_accuracy']:.4f}")
+            
+            if 'global_loss' in first_round and 'global_loss' in last_round:
+                lines.append(f"- **Initial Training Loss:** {first_round['global_loss']:.4f}")
+                lines.append(f"- **Final Training Loss:** {last_round['global_loss']:.4f}")
+                lines.append(f"- **Loss Reduction:** {first_round['global_loss'] - last_round['global_loss']:.4f}")
+            
             lines.append("")
-        
-        if train_accuracy:
-            accuracies = [acc[1] for acc in train_accuracy]
-            lines.append(f"- **Initial Accuracy:** {accuracies[0]:.4f}")
-            lines.append(f"- **Final Accuracy:** {accuracies[-1]:.4f}")
-            lines.append(f"- **Accuracy Improvement:** {accuracies[-1] - accuracies[0]:.4f}")
-            lines.append(f"- **Average Accuracy:** {np.mean(accuracies):.4f}")
-            lines.append("")
+    else:
+        lines.append("*Training history not available*\n")
     
     # Strategy Comparison (if available)
     if comparison_metrics:

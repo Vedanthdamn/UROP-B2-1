@@ -1,6 +1,6 @@
 # Federated Model Evaluation Report
 
-**Generated:** 2026-01-31 04:58:17
+**Generated:** 2026-01-31 05:00:14
 
 ---
 
@@ -24,7 +24,7 @@
 - **Precision (Weighted):** 0.9255
 - **Recall (Weighted):** 0.9000
 - **F1-Score (Weighted):** 0.9116
-- **Cross-Entropy Loss:** 0.6148
+- **Cross-Entropy Loss:** 0.6025
 
 ### Data Distribution
 
@@ -48,28 +48,35 @@ See `confusion_matrix.png` for visualization.
 
 | Client ID | Accuracy | Samples |
 |-----------|----------|---------|
-| hospital_0 | 0.7703 | 74 |
-| hospital_1 | 0.7846 | 65 |
-| hospital_2 | 0.7119 | 59 |
-| hospital_3 | 0.5897 | 39 |
-| hospital_4 | 0.8387 | 62 |
+| hospital_0 | 0.7568 | 74 |
+| hospital_1 | 0.7538 | 65 |
+| hospital_2 | 0.7627 | 59 |
+| hospital_3 | 0.6410 | 39 |
+| hospital_4 | 0.7581 | 62 |
 
 ### Fairness Metrics (Accuracy Variance)
 
-- **Mean Client Accuracy:** 0.7390
-- **Standard Deviation:** 0.0849
-- **Minimum Client Accuracy:** 0.5897
-- **Maximum Client Accuracy:** 0.8387
-- **Accuracy Variance:** 0.0072
+- **Mean Client Accuracy:** 0.7345
+- **Standard Deviation:** 0.0468
+- **Minimum Client Accuracy:** 0.6410
+- **Maximum Client Accuracy:** 0.7627
+- **Accuracy Variance:** 0.0022
 
 **Fairness Interpretation:**
-- ~ Moderate variance indicates some performance disparity
+- ✓ Low variance indicates fair performance across clients
 
 ## Training Summary
+
+- **Initial Training Accuracy:** 0.6639
+- **Final Training Accuracy:** 0.7689
+- **Accuracy Improvement:** 0.1050
+- **Initial Training Loss:** 0.6617
+- **Final Training Loss:** 0.6143
+- **Loss Reduction:** 0.0474
 
 ## Conclusions
 
 1. **Overall Performance:** The federated model achieved 90.00% accuracy on test data.
 2. **Model Quality:** Weighted F1-score of 0.9116 indicates good overall performance accounting for class imbalance.
-3. **Fairness:** Accuracy variance of 0.0072 across clients suggests equitable performance distribution.
-4. **Client Consistency:** Standard deviation of 0.0849 across clients indicates moderate consistency in model performance across different hospital datasets.
+3. **Fairness:** Accuracy variance of 0.0022 across clients suggests equitable performance distribution.
+4. **Client Consistency:** Standard deviation of 0.0468 across clients indicates high consistency in model performance across different hospital datasets.
