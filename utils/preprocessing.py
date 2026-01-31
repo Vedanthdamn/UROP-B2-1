@@ -246,7 +246,7 @@ class HeartFailurePreprocessor:
             raise RuntimeError("Cannot save unfitted preprocessor. Call fit() first.")
         
         # Get consistent file paths
-        json_path, base_path = self._get_safe_paths(filepath)
+        json_path, base_path = HeartFailurePreprocessor._get_safe_paths(filepath)
         
         # Save metadata and statistics as JSON
         metadata = {

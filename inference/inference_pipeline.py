@@ -38,6 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Error message constant for missing training data
+_TRAINING_DATA_MISSING_ERROR = (
+    "Training data file 'data/heart_failure.csv' not found. "
+    "Cannot create preprocessor without training data. "
+    "Please ensure the data file exists or provide a valid preprocessor path."
+)
+
 
 class InferencePipeline:
     """
@@ -221,11 +228,7 @@ class InferencePipeline:
                     try:
                         data = pd.read_csv('data/heart_failure.csv')
                     except FileNotFoundError:
-                        raise FileNotFoundError(
-                            "Training data file 'data/heart_failure.csv' not found. "
-                            "Cannot create preprocessor without training data. "
-                            "Please ensure the data file exists or provide a valid preprocessor path."
-                        )
+                        raise FileNotFoundError(_TRAINING_DATA_MISSING_ERROR)
                     self.preprocessor = create_preprocessing_pipeline()
                     self.preprocessor.fit(data)
                     logger.info("✓ New preprocessor created and fitted")
@@ -235,11 +238,7 @@ class InferencePipeline:
             try:
                 data = pd.read_csv('data/heart_failure.csv')
             except FileNotFoundError:
-                raise FileNotFoundError(
-                    "Training data file 'data/heart_failure.csv' not found. "
-                    "Cannot create preprocessor without training data. "
-                    "Please ensure the data file exists or provide a valid preprocessor path."
-                )
+                raise FileNotFoundError(_TRAINING_DATA_MISSING_ERROR)
             self.preprocessor = create_preprocessing_pipeline()
             self.preprocessor.fit(data)
             logger.info("✓ Preprocessor created and fitted successfully")
