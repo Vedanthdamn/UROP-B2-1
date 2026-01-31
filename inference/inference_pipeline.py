@@ -218,6 +218,7 @@ class InferencePipeline:
                 logger.info("Attempting to load using safe format...")
                 try:
                     # Remove any file extension to get base path for safe format loading
+                    # This is consistent with how _get_safe_paths() works
                     safe_path = os.path.splitext(preprocessor_path)[0]
                     self.preprocessor = HeartFailurePreprocessor.load_safe(safe_path)
                     logger.info("✓ Preprocessor loaded successfully (safe format)")

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import json
+import os
 from typing import Tuple, Optional, Union
 
 
@@ -60,7 +61,7 @@ class HeartFailurePreprocessor:
         self.is_fitted = False
     
     @staticmethod
-    def _get_safe_paths(filepath: str) -> tuple:
+    def _get_safe_paths(filepath: str) -> Tuple[str, str]:
         """
         Get consistent file paths for safe serialization.
         
@@ -72,8 +73,8 @@ class HeartFailurePreprocessor:
         """
         # Ensure .json extension
         json_path = filepath if filepath.endswith('.json') else filepath + '.json'
-        # Remove .json extension to get base path
-        base_path = json_path[:-5]
+        # Remove .json extension to get base path (use splitext for robustness)
+        base_path = os.path.splitext(json_path)[0]
         return json_path, base_path
     
     def fit(self, data: Union[pd.DataFrame, np.ndarray]) -> 'HeartFailurePreprocessor':
@@ -276,10 +277,10 @@ class HeartFailurePreprocessor:
         with open(json_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        # Save NumPy arrays separately
-        np.save(base_path + '_means.npy', self.feature_means)
-        np.save(base_path + '_stds.npy', self.feature_stds)
-        np.save(base_path + '_medians.npy', self.feature_medians)
+        # Save NumPy arrays separately (use consistent naming)
+        np.save(f'{base_path}_means.npy', self.feature_means)
+        np.save(f'{base_path}_stds.npy', self.feature_stds)
+        np.save(f'{base_path}_medians.npy', self.feature_medians)
     
     @staticmethod
     def load(filepath: str) -> 'HeartFailurePreprocessor':
@@ -376,10 +377,10 @@ class HeartFailurePreprocessor:
         preprocessor.feature_columns = metadata['feature_columns']
         preprocessor.is_fitted = metadata['is_fitted']
         
-        # Load NumPy arrays
-        preprocessor.feature_means = np.load(base_path + '_means.npy')
-        preprocessor.feature_stds = np.load(base_path + '_stds.npy')
-        preprocessor.feature_medians = np.load(base_path + '_medians.npy')
+        # Load NumPy arrays (use consistent naming)
+        preprocessor.feature_means = np.load(f'{base_path}_means.npy')
+        preprocessor.feature_stds = np.load(f'{base_path}_stds.npy')
+        preprocessor.feature_medians = np.load(f'{base_path}_medians.npy')
         
         return preprocessor
     
