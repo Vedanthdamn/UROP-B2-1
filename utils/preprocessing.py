@@ -72,8 +72,8 @@ class HeartFailurePreprocessor:
         """
         # Ensure .json extension
         json_path = filepath if filepath.endswith('.json') else filepath + '.json'
-        # Remove .json extension to get base path (handle multiple .json occurrences)
-        base_path = json_path[:-5] if json_path.endswith('.json') else json_path
+        # Remove .json extension to get base path
+        base_path = json_path[:-5]
         return json_path, base_path
     
     def fit(self, data: Union[pd.DataFrame, np.ndarray]) -> 'HeartFailurePreprocessor':
@@ -277,9 +277,9 @@ class HeartFailurePreprocessor:
             json.dump(metadata, f, indent=2)
         
         # Save NumPy arrays separately
-        np.save(f'{base_path}_means.npy', self.feature_means)
-        np.save(f'{base_path}_stds.npy', self.feature_stds)
-        np.save(f'{base_path}_medians.npy', self.feature_medians)
+        np.save(base_path + '_means.npy', self.feature_means)
+        np.save(base_path + '_stds.npy', self.feature_stds)
+        np.save(base_path + '_medians.npy', self.feature_medians)
     
     @staticmethod
     def load(filepath: str) -> 'HeartFailurePreprocessor':
@@ -377,9 +377,9 @@ class HeartFailurePreprocessor:
         preprocessor.is_fitted = metadata['is_fitted']
         
         # Load NumPy arrays
-        preprocessor.feature_means = np.load(f'{base_path}_means.npy')
-        preprocessor.feature_stds = np.load(f'{base_path}_stds.npy')
-        preprocessor.feature_medians = np.load(f'{base_path}_medians.npy')
+        preprocessor.feature_means = np.load(base_path + '_means.npy')
+        preprocessor.feature_stds = np.load(base_path + '_stds.npy')
+        preprocessor.feature_medians = np.load(base_path + '_medians.npy')
         
         return preprocessor
     

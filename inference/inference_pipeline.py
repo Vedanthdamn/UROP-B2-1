@@ -217,8 +217,7 @@ class InferencePipeline:
                 logger.warning(f"Standard loading failed: {e}")
                 logger.info("Attempting to load using safe format...")
                 try:
-                    # Convert .pkl path to base path for safe loading
-                    # Remove extension and try safe format
+                    # Remove any file extension to get base path for safe format loading
                     safe_path = os.path.splitext(preprocessor_path)[0]
                     self.preprocessor = HeartFailurePreprocessor.load_safe(safe_path)
                     logger.info("✓ Preprocessor loaded successfully (safe format)")
