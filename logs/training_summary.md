@@ -1,38 +1,40 @@
 # Federated Training Experiment Summary
 
-**Generated:** 2026-01-31 04:33:21
+**Generated:** 2026-01-31 04:38:04
 
 ---
 
 ## Experiment Configuration
 
-- **Strategy:** fedprox
+- **Strategy:** fedavg
 - **Number of Clients:** 5
 - **Number of Rounds:** 2
 - **Model:** LSTM (PRIMARY)
 - **Data Partitioning:** Non-IID
-- **Differential Privacy:** Disabled
-- **Proximal Mu:** 0.1
+- **Differential Privacy:** Enabled
+  - Epsilon (ε): 1.0
+  - Delta (δ): 1e-05
+  - L2 Norm Clip: 1.0
 - **Random Seed:** 42
 
 ## Per-Round Training Metrics
 
 | Round | Global Loss | Global Accuracy | Participating Clients | Total Samples |
 |-------|-------------|-----------------|----------------------|---------------|
-| 1 | 0.6924 | 0.5294 | 5 | 238 |
-| 2 | 0.6824 | 0.5588 | 5 | 238 |
+| 1 | 0.6964 | 0.4790 | 5 | 238 |
+| 2 | 2.3890 | 0.5294 | 5 | 238 |
 
 ## Training Summary
 
-- **Initial Loss:** 0.6924
-- **Final Loss:** 0.6824
-- **Loss Improvement:** 0.0100
-- **Average Loss:** 0.6874
+- **Initial Loss:** 0.6964
+- **Final Loss:** 2.3890
+- **Loss Improvement:** -1.6926
+- **Average Loss:** 1.5427
 
-- **Initial Accuracy:** 0.5294
-- **Final Accuracy:** 0.5588
-- **Accuracy Improvement:** 0.0294
-- **Average Accuracy:** 0.5441
+- **Initial Accuracy:** 0.4790
+- **Final Accuracy:** 0.5294
+- **Accuracy Improvement:** 0.0504
+- **Average Accuracy:** 0.5042
 
 ## Privacy Guarantees
 
@@ -40,6 +42,7 @@
 - ✓ Only model weights were shared with server
 - ✓ Server never accessed individual patient records
 - ✓ All client updates treated as privacy-protected
+- ✓ Differential privacy enabled with (ε=1.0, δ=1e-05)
 
 ## Client Participation Summary
 
