@@ -18,6 +18,8 @@ import os
 import sys
 import logging
 
+import numpy as np
+
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
@@ -108,7 +110,6 @@ def main():
             client_samples.append(n_samples)
         
         # Aggregate weights (FedAvg)
-        import numpy as np
         total_samples = sum(client_samples)
         aggregated_weights = []
         

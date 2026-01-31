@@ -251,11 +251,11 @@
             Always consult with qualified healthcare professionals for medical advice and diagnosis.
         </div>
         
-        <div class="upload-section" id="uploadSection">
-            <div class="upload-icon">➕</div>
+        <div class="upload-section" id="uploadSection" role="button" aria-label="Upload patient report CSV file" tabindex="0">
+            <div class="upload-icon" aria-hidden="true">➕</div>
             <div class="upload-text">Upload Patient Report</div>
             <div class="upload-subtext">Click to select a CSV file or drag and drop</div>
-            <input type="file" id="fileInput" accept=".csv">
+            <input type="file" id="fileInput" accept=".csv" aria-label="File input for patient report">
             <div class="selected-file" id="selectedFile" style="display: none;"></div>
             <button class="btn" id="uploadBtn" style="display: none;">Analyze Report</button>
         </div>

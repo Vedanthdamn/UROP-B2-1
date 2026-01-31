@@ -59,50 +59,47 @@ def create_app(config: Dict = None) -> Flask:
     if config:
         app.config.update(config)
     
-    # Set secret key for session
-    app.config['SECRET_KEY'] = os.urandom(24)
+    # Set secret key for session (use environment variable in production)
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
     
-    # Initialize inference pipeline
-    @app.before_request
-    def init_pipeline():
-        """Initialize the inference pipeline on first request."""
-        global inference_pipeline
-        
-        if inference_pipeline is None:
-            logger.info("Initializing inference pipeline...")
-            try:
-                inference_pipeline = InferencePipeline()
+    # Initialize inference pipeline once at startup
+    global inference_pipeline
+    
+    if inference_pipeline is None:
+        logger.info("Initializing inference pipeline...")
+        try:
+            inference_pipeline = InferencePipeline()
+            
+            # Get paths relative to project root
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            history_path = os.path.join(project_root, 'logs', 'training_history.json')
+            data_path = os.path.join(project_root, 'data', 'heart_failure.csv')
+            weights_path = os.path.join(project_root, 'logs', 'model_weights.h5')
+            
+            # Try to load with saved weights
+            if os.path.exists(weights_path):
+                logger.info(f"Loading model from saved weights: {weights_path}")
+                inference_pipeline.load_model_from_history(history_path, data_path, weights_path)
+            else:
+                logger.warning("No saved weights found. Using fresh (untrained) model.")
+                logger.warning("For trained model, run: python save_model_weights.py")
                 
-                # Get paths relative to project root
-                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-                history_path = os.path.join(project_root, 'logs', 'training_history.json')
-                data_path = os.path.join(project_root, 'data', 'heart_failure.csv')
-                weights_path = os.path.join(project_root, 'logs', 'model_weights.h5')
+                # Load just the preprocessor and create an untrained model
+                from models import get_primary_model
+                from utils.preprocessing import create_preprocessing_pipeline
+                import pandas as pd
                 
-                # Try to load with saved weights
-                if os.path.exists(weights_path):
-                    logger.info(f"Loading model from saved weights: {weights_path}")
-                    inference_pipeline.load_model_from_history(history_path, data_path, weights_path)
-                else:
-                    logger.warning("No saved weights found. Using fresh (untrained) model.")
-                    logger.warning("For trained model, run: python save_model_weights.py")
-                    
-                    # Load just the preprocessor and create an untrained model
-                    from models import get_primary_model
-                    from utils.preprocessing import create_preprocessing_pipeline
-                    import pandas as pd
-                    
-                    data = pd.read_csv(data_path)
-                    inference_pipeline.preprocessor = create_preprocessing_pipeline()
-                    inference_pipeline.preprocessor.fit(data)
-                    inference_pipeline.model = get_primary_model(input_shape=(1, 12))
-                    inference_pipeline.is_loaded = True
-                    
-                logger.info("Inference pipeline initialized successfully!")
-            except Exception as e:
-                logger.error(f"Failed to initialize inference pipeline: {e}")
-                raise
+                data = pd.read_csv(data_path)
+                inference_pipeline.preprocessor = create_preprocessing_pipeline()
+                inference_pipeline.preprocessor.fit(data)
+                inference_pipeline.model = get_primary_model(input_shape=(1, 12))
+                inference_pipeline.is_loaded = True
+                
+            logger.info("Inference pipeline initialized successfully!")
+        except Exception as e:
+            logger.error(f"Failed to initialize inference pipeline: {e}")
+            raise
     
     @app.route('/')
     def index():
