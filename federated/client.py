@@ -38,6 +38,7 @@ from flwr.common import (
 
 from models import get_primary_model
 from utils.preprocessing import HeartFailurePreprocessor
+from .differential_privacy import DifferentialPrivacy, DPConfig
 
 # Configure logging (no patient data logging)
 logging.basicConfig(
@@ -60,6 +61,7 @@ class FlowerClient(fl.client.NumPyClient):
     - Only model weights are sent to the server
     - No patient-level data is logged
     - Aggregated metrics only (no individual predictions)
+    - Optional Differential Privacy (DP) protection
     
     Attributes:
         model (tf.keras.Model): TensorFlow LSTM model for training
@@ -70,6 +72,8 @@ class FlowerClient(fl.client.NumPyClient):
         epochs_per_round (int): Number of local training epochs per round
         batch_size (int): Batch size for training
         client_id (str): Client identifier (for logging only)
+        dp_config (DPConfig): Differential privacy configuration (optional)
+        dp_mechanism (DifferentialPrivacy): DP mechanism instance (if enabled)
     """
     
     def __init__(
@@ -81,7 +85,8 @@ class FlowerClient(fl.client.NumPyClient):
         y_val: Optional[np.ndarray] = None,
         epochs_per_round: int = 5,
         batch_size: int = 32,
-        client_id: str = "unknown"
+        client_id: str = "unknown",
+        dp_config: Optional[DPConfig] = None
     ):
         """
         Initialize the Flower client.
@@ -95,10 +100,13 @@ class FlowerClient(fl.client.NumPyClient):
             epochs_per_round: Number of local training epochs per round
             batch_size: Batch size for training
             client_id: Client identifier for logging
+            dp_config: Optional differential privacy configuration
         
         Privacy Note:
             All data (X_train, y_train, X_val, y_val) remains on the client
             and is NEVER sent to the server. Only model weights are shared.
+            If dp_config is provided, differential privacy is applied to
+            model updates before they are sent to the server.
         """
         self.model = model
         self.X_train = X_train
@@ -108,13 +116,21 @@ class FlowerClient(fl.client.NumPyClient):
         self.epochs_per_round = epochs_per_round
         self.batch_size = batch_size
         self.client_id = client_id
+        self.dp_config = dp_config
+        
+        # Initialize DP mechanism if config provided
+        if self.dp_config is not None and self.dp_config.enabled:
+            self.dp_mechanism = DifferentialPrivacy(self.dp_config)
+        else:
+            self.dp_mechanism = None
         
         # Log client initialization (NO patient data)
         logger.info(
             f"Client {self.client_id} initialized: "
             f"train_samples={len(X_train)}, "
             f"val_samples={len(X_val) if X_val is not None else 0}, "
-            f"epochs_per_round={epochs_per_round}"
+            f"epochs_per_round={epochs_per_round}, "
+            f"dp_enabled={self.dp_mechanism is not None}"
         )
     
     def get_parameters(self, config: Dict[str, Scalar]) -> NDArrays:
@@ -155,7 +171,8 @@ class FlowerClient(fl.client.NumPyClient):
         This method:
         1. Receives global model weights from server
         2. Trains locally on hospital data for fixed epochs
-        3. Returns updated weights (NO patient data)
+        3. Applies differential privacy (if enabled) to model updates
+        4. Returns DP-protected weights (NO patient data)
         
         Args:
             parameters: Global model weights from server
@@ -163,17 +180,21 @@ class FlowerClient(fl.client.NumPyClient):
         
         Returns:
             Tuple containing:
-                - Updated model weights (NDArrays)
+                - Updated model weights (NDArrays) - DP-protected if enabled
                 - Number of training samples (int)
                 - Training metrics (Dict)
         
         Privacy Note:
             - Trains on local data only
+            - If DP is enabled, applies gradient clipping and noise BEFORE sending weights
             - Returns only model weights and aggregated metrics
             - NO individual patient data or predictions returned
         """
         # Set global model weights
         self.set_parameters(parameters)
+        
+        # Store original weights for DP computation
+        original_weights = self.model.get_weights()
         
         # Log training start (NO patient data)
         logger.info(
@@ -192,14 +213,56 @@ class FlowerClient(fl.client.NumPyClient):
             verbose=0  # Suppress individual batch output (privacy)
         )
         
-        # Get updated model weights
+        # Get updated model weights (before DP)
         updated_weights = self.model.get_weights()
+        
+        # Apply differential privacy if enabled
+        if self.dp_mechanism is not None:
+            # Apply DP to weight updates BEFORE sending to server
+            dp_weights, dp_metrics = self.dp_mechanism.apply_dp_to_updates(
+                original_weights, updated_weights
+            )
+            
+            # Set the DP-protected weights back to the model for loss computation
+            self.model.set_weights(dp_weights)
+            
+            # Compute training loss AFTER DP application
+            train_loss_after_dp = self.model.evaluate(
+                self.X_train,
+                self.y_train,
+                batch_size=self.batch_size,
+                verbose=0
+            )[0]
+            
+            # Use DP-protected weights for return
+            final_weights = dp_weights
+            
+            # Log DP application
+            logger.info(
+                f"Client {self.client_id} applied DP: "
+                f"epsilon={dp_metrics['dp_epsilon']}, "
+                f"delta={dp_metrics['dp_delta']}, "
+                f"l2_norm_clip={dp_metrics['dp_l2_norm_clip']}, "
+                f"train_loss_after_dp={train_loss_after_dp:.4f}"
+            )
+        else:
+            # No DP - use updated weights directly
+            final_weights = updated_weights
+            dp_metrics = {"dp_enabled": False}
+            train_loss_after_dp = float(history.history["loss"][-1])
         
         # Prepare aggregated metrics (NO patient-level data)
         metrics = {
             "train_loss": float(history.history["loss"][-1]),
             "train_accuracy": float(history.history["accuracy"][-1]),
         }
+        
+        # Add DP metrics
+        metrics.update(dp_metrics)
+        
+        # Add loss after DP if DP was applied
+        if self.dp_mechanism is not None:
+            metrics["train_loss_after_dp"] = float(train_loss_after_dp)
         
         # Add validation metrics if available
         if self.X_val is not None:
@@ -213,8 +276,8 @@ class FlowerClient(fl.client.NumPyClient):
             f"train_acc={metrics['train_accuracy']:.4f}"
         )
         
-        # Return: updated weights, number of samples, metrics
-        return updated_weights, len(self.X_train), metrics
+        # Return: DP-protected weights (if enabled), number of samples, metrics
+        return final_weights, len(self.X_train), metrics
     
     def evaluate(
         self, 
@@ -279,7 +342,8 @@ def create_flower_client(
     batch_size: int = 32,
     client_id: str = "unknown",
     input_shape: Tuple[int, int] = (1, 12),
-    random_seed: int = 42
+    random_seed: int = 42,
+    dp_config: Optional[DPConfig] = None
 ) -> FlowerClient:
     """
     Factory function to create a configured Flower client.
@@ -289,7 +353,7 @@ def create_flower_client(
     2. Creates train/val split
     3. Reshapes data for LSTM input
     4. Initializes LSTM model
-    5. Returns configured FlowerClient
+    5. Returns configured FlowerClient with optional DP
     
     Args:
         client_data: Raw client dataset (pandas DataFrame or numpy array)
@@ -300,16 +364,19 @@ def create_flower_client(
         client_id: Client identifier for logging
         input_shape: Input shape for LSTM model (sequence_length, n_features)
         random_seed: Random seed for reproducibility
+        dp_config: Optional differential privacy configuration
     
     Returns:
         FlowerClient: Configured Flower client ready for federated training
     
     Privacy Note:
         All data processing happens locally. No patient data leaves the client.
+        If dp_config is provided, differential privacy is applied to model updates.
     
     Example:
         >>> from utils.client_partitioning import partition_for_federated_clients
         >>> from utils.preprocessing import create_preprocessing_pipeline
+        >>> from federated import create_dp_config
         >>> import pandas as pd
         >>> 
         >>> # Load and partition data
@@ -320,11 +387,15 @@ def create_flower_client(
         >>> preprocessor = create_preprocessing_pipeline()
         >>> preprocessor.fit(data)
         >>> 
-        >>> # Create client for first hospital
+        >>> # Create DP config
+        >>> dp_config = create_dp_config(epsilon=1.0, delta=1e-5, l2_norm_clip=1.0)
+        >>> 
+        >>> # Create client for first hospital with DP
         >>> client = create_flower_client(
         ...     client_data=client_datasets[0],
         ...     preprocessor=preprocessor,
-        ...     client_id="hospital_0"
+        ...     client_id="hospital_0",
+        ...     dp_config=dp_config
         ... )
     """
     # Convert to DataFrame if needed
@@ -371,7 +442,8 @@ def create_flower_client(
     logger.info(
         f"Created FlowerClient '{client_id}': "
         f"train_samples={len(X_train)}, "
-        f"val_samples={len(X_val) if X_val is not None else 0}"
+        f"val_samples={len(X_val) if X_val is not None else 0}, "
+        f"dp_enabled={dp_config is not None and dp_config.enabled if dp_config else False}"
     )
     
     # Create and return FlowerClient
@@ -383,5 +455,6 @@ def create_flower_client(
         y_val=y_val,
         epochs_per_round=epochs_per_round,
         batch_size=batch_size,
-        client_id=client_id
+        client_id=client_id,
+        dp_config=dp_config
     )
