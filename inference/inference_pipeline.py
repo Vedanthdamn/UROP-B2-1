@@ -218,14 +218,28 @@ class InferencePipeline:
                     logger.error(f"Safe loading also failed: {safe_error}")
                     logger.info("Creating new preprocessor from training data...")
                     # Fall back to creating new preprocessor
-                    data = pd.read_csv('data/heart_failure.csv')
+                    try:
+                        data = pd.read_csv('data/heart_failure.csv')
+                    except FileNotFoundError:
+                        raise FileNotFoundError(
+                            "Training data file 'data/heart_failure.csv' not found. "
+                            "Cannot create preprocessor without training data. "
+                            "Please ensure the data file exists or provide a valid preprocessor path."
+                        )
                     self.preprocessor = create_preprocessing_pipeline()
                     self.preprocessor.fit(data)
                     logger.info("✓ New preprocessor created and fitted")
         else:
             # Create and fit new preprocessor
             logger.info("Creating new preprocessor...")
-            data = pd.read_csv('data/heart_failure.csv')
+            try:
+                data = pd.read_csv('data/heart_failure.csv')
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    "Training data file 'data/heart_failure.csv' not found. "
+                    "Cannot create preprocessor without training data. "
+                    "Please ensure the data file exists or provide a valid preprocessor path."
+                )
             self.preprocessor = create_preprocessing_pipeline()
             self.preprocessor.fit(data)
             logger.info("✓ Preprocessor created and fitted successfully")

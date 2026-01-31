@@ -245,6 +245,9 @@ class HeartFailurePreprocessor:
         if not self.is_fitted:
             raise RuntimeError("Cannot save unfitted preprocessor. Call fit() first.")
         
+        # Get consistent file paths
+        json_path, base_path = self._get_safe_paths(filepath)
+        
         # Save metadata and statistics as JSON
         metadata = {
             'target_column': self.target_column,
@@ -253,12 +256,10 @@ class HeartFailurePreprocessor:
         }
         
         # Save JSON metadata
-        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
         with open(json_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
         # Save NumPy arrays separately
-        base_path = json_path.replace('.json', '')
         np.save(f'{base_path}_means.npy', self.feature_means)
         np.save(f'{base_path}_stds.npy', self.feature_stds)
         np.save(f'{base_path}_medians.npy', self.feature_medians)
@@ -346,8 +347,10 @@ class HeartFailurePreprocessor:
         Raises:
             FileNotFoundError: If required files are not found.
         """
+        # Get consistent file paths
+        json_path, base_path = HeartFailurePreprocessor._get_safe_paths(filepath)
+        
         # Load JSON metadata
-        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
         with open(json_path, 'r') as f:
             metadata = json.load(f)
         
@@ -357,7 +360,6 @@ class HeartFailurePreprocessor:
         preprocessor.is_fitted = metadata['is_fitted']
         
         # Load NumPy arrays
-        base_path = json_path.replace('.json', '')
         preprocessor.feature_means = np.load(f'{base_path}_means.npy')
         preprocessor.feature_stds = np.load(f'{base_path}_stds.npy')
         preprocessor.feature_medians = np.load(f'{base_path}_medians.npy')
@@ -380,6 +382,21 @@ class HeartFailurePreprocessor:
                    f"n_features={len(self.feature_columns)}, fitted=True)")
         else:
             return f"HeartFailurePreprocessor(target='{self.target_column}', fitted=False)"
+    
+    @staticmethod
+    def _get_safe_paths(filepath: str) -> tuple:
+        """
+        Get consistent file paths for safe serialization.
+        
+        Args:
+            filepath: Base filepath (with or without .json extension)
+        
+        Returns:
+            Tuple of (json_path, base_path) for consistent file naming
+        """
+        json_path = filepath if filepath.endswith('.json') else filepath + '.json'
+        base_path = json_path.replace('.json', '')
+        return json_path, base_path
 
 
 def create_preprocessing_pipeline(target_column: str = 'DEATH_EVENT') -> HeartFailurePreprocessor:
