@@ -289,7 +289,7 @@ class PDFInference:
         # Extract Ejection Fraction
         ef_patterns = [
             r'ejection\s*fraction[:\s]+(\d{1,3})',
-            r'ef[:\s]+(\d{1,3})(?:\%|percent)',
+            r'ef[:\s]+(\d{1,3})(?:\%|percent)?',  # Make suffix optional
         ]
         for pattern in ef_patterns:
             match = re.search(pattern, text_lower)
@@ -403,6 +403,7 @@ class PDFInference:
                 logger.info(f"  {feature_name}: {value} (default)")
         
         # Convert to numpy array with shape (1, 1, 12) for LSTM input
+        # Shape: (batch_size=1, time_steps=1, features=12) - LSTM expects 3D input
         feature_array = np.array(features, dtype=np.float32).reshape(1, 1, -1)
         
         logger.info(f"Feature vector shape: {feature_array.shape}")
@@ -431,8 +432,8 @@ class PDFInference:
         prediction_proba = self.model.predict(features, verbose=0)
         probability = float(prediction_proba[0][0])
         
-        # Convert to label
-        label = "Death Event Risk: HIGH" if probability >= 0.5 else "Death Event Risk: LOW"
+        # Convert to label - use consistent format with API
+        label = "HIGH RISK" if probability >= 0.5 else "LOW RISK"
         
         logger.info(f"Prediction: {label}")
         logger.info(f"Probability: {probability:.4f}")

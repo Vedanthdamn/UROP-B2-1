@@ -263,7 +263,7 @@
             </label>
         </div>
         
-        <div class="upload-section" id="uploadSection" role="button" aria-label="Upload patient report file" tabindex="0">
+        <div class="upload-section" id="uploadSection" role="button" aria-label="Upload CSV patient report file" tabindex="0">
             <div class="upload-icon" aria-hidden="true">➕</div>
             <div class="upload-text" id="uploadText">Upload Patient Report</div>
             <div class="upload-subtext" id="uploadSubtext">Click to select a CSV file or drag and drop</div>
@@ -308,6 +308,7 @@
             fileInput.accept = '.csv';
             uploadText.textContent = 'Upload Patient Report (CSV)';
             uploadSubtext.textContent = 'Click to select a CSV file or drag and drop';
+            uploadSection.setAttribute('aria-label', 'Upload CSV patient report file');
             resetFileSelection();
         });
         
@@ -316,6 +317,7 @@
             fileInput.accept = '.pdf';
             uploadText.textContent = 'Upload Blood Report (PDF)';
             uploadSubtext.textContent = 'Click to select a PDF file or drag and drop';
+            uploadSection.setAttribute('aria-label', 'Upload PDF blood report file');
             resetFileSelection();
         });
         
@@ -440,9 +442,10 @@
             const card = document.createElement('div');
             card.className = 'result-card';
             
-            const isHighRisk = data.prediction === 'HIGH RISK' || data.prediction.includes('HIGH');
+            // Standardized format: "HIGH RISK" or "LOW RISK"
+            const isHighRisk = data.prediction === 'HIGH RISK';
             const predictionClass = isHighRisk ? 'prediction-yes' : 'prediction-no';
-            const predictionText = data.prediction_label || data.prediction;
+            const predictionText = isHighRisk ? 'Death Event Risk: HIGH' : 'Death Event Risk: LOW';
             
             card.innerHTML = `
                 <div class="result-header">

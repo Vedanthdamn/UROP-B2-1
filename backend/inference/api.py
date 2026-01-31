@@ -50,9 +50,10 @@ app = FastAPI(
 )
 
 # Add CORS middleware to allow frontend requests
+# In production, specify exact origins instead of "*"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=["http://localhost:5000", "http://127.0.0.1:5000"],  # Restrict to frontend origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -164,8 +165,7 @@ async def predict(file: UploadFile = File(...)):
         # Prepare response
         response = {
             "success": True,
-            "prediction": "HIGH RISK" if "HIGH" in label else "LOW RISK",
-            "prediction_label": label,
+            "prediction": label,  # "HIGH RISK" or "LOW RISK"
             "probability": round(probability, 4),
             "probability_percentage": round(probability * 100, 2),
             "extracted_values": {
