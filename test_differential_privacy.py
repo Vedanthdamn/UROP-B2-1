@@ -54,14 +54,14 @@ def test_dp_config_creation():
     
     # Test invalid epsilon
     try:
-        invalid_config = DPConfig(epsilon=-1.0, delta=1e-5, l2_norm_clip=1.0, enabled=True)
+        _ = DPConfig(epsilon=-1.0, delta=1e-5, l2_norm_clip=1.0, enabled=True)
         assert False, "Should raise ValueError for negative epsilon"
     except ValueError as e:
         print(f"  ✓ Correctly rejected negative epsilon: {e}")
     
     # Test invalid delta
     try:
-        invalid_config = DPConfig(epsilon=1.0, delta=1.5, l2_norm_clip=1.0, enabled=True)
+        _ = DPConfig(epsilon=1.0, delta=1.5, l2_norm_clip=1.0, enabled=True)
         assert False, "Should raise ValueError for delta >= 1"
     except ValueError as e:
         print(f"  ✓ Correctly rejected invalid delta: {e}")
@@ -144,9 +144,10 @@ def test_noise_addition():
         noise_samples.extend(noise.flatten())
     
     actual_stddev = np.std(noise_samples)
-    # Allow 50% margin due to randomness and small sample
-    assert abs(actual_stddev - expected_stddev) / expected_stddev < 0.5, \
-        f"Noise stddev {actual_stddev:.4f} should be close to expected {expected_stddev:.4f}"
+    # Allow 30% margin due to randomness and small sample size
+    # In practice, with more samples this would converge closer to expected
+    assert abs(actual_stddev - expected_stddev) / expected_stddev < 0.3, \
+        f"Noise stddev {actual_stddev:.4f} should be reasonably close to expected {expected_stddev:.4f}"
     
     print(f"  ✓ Noise added successfully: expected_stddev={expected_stddev:.4f}, actual={actual_stddev:.4f}")
 

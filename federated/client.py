@@ -249,7 +249,6 @@ class FlowerClient(fl.client.NumPyClient):
             # No DP - use updated weights directly
             final_weights = updated_weights
             dp_metrics = {"dp_enabled": False}
-            train_loss_after_dp = float(history.history["loss"][-1])
         
         # Prepare aggregated metrics (NO patient-level data)
         metrics = {

@@ -71,12 +71,24 @@ class DPConfig:
             
             # Compute noise multiplier from epsilon/delta if not provided
             if self.noise_multiplier is None:
-                # Simple approximation: sigma = sqrt(2 * ln(1.25/delta)) / epsilon
-                # This is a conservative estimate for (epsilon, delta)-DP
+                # Approximation based on analytical Gaussian mechanism for (ε, δ)-DP
+                # Formula: σ = sqrt(2 * ln(1.25/δ)) * Δ / ε
+                # where Δ is the sensitivity (handled by clipping) and normalized to 1
+                # 
+                # Reference: Dwork & Roth, "The Algorithmic Foundations of Differential Privacy"
+                # Note: This is a conservative estimate suitable for a single query.
+                # For composition over multiple rounds, consider using advanced composition
+                # theorems or the moments accountant method (e.g., TensorFlow Privacy's
+                # compute_rdp_from_ledger).
+                #
+                # Assumption: Single-round privacy analysis. For multi-round federated
+                # learning, the privacy budget accumulates and should be tracked using
+                # composition theorems.
                 self.noise_multiplier = np.sqrt(2 * np.log(1.25 / self.delta)) / self.epsilon
                 logger.info(
                     f"Computed noise_multiplier={self.noise_multiplier:.4f} "
-                    f"from epsilon={self.epsilon}, delta={self.delta}"
+                    f"from epsilon={self.epsilon}, delta={self.delta} "
+                    f"(single-round approximation)"
                 )
 
 
@@ -183,6 +195,10 @@ class DifferentialPrivacy:
         Privacy Note:
             The noise scale is calibrated to provide (epsilon, delta)-DP.
             Larger noise_multiplier = stronger privacy = more noise.
+            
+            For production deployments requiring strong privacy guarantees,
+            consider using a cryptographically secure random number generator
+            by seeding with: np.random.seed(secrets.randbits(128))
         """
         if not self.config.enabled:
             return gradients
