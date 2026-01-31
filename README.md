@@ -470,6 +470,119 @@ Run the demo script to see federated training in action:
 python demo_federated_training.py
 ```
 
+## Running Federated Training Experiments
+
+The repository includes a comprehensive script for running end-to-end federated training experiments with full logging and result saving capabilities.
+
+### Features
+
+- **5 Non-IID Hospital Clients**: Realistic data distribution across hospitals
+- **LSTM Model**: Uses the PRIMARY model for all experiments
+- **Fixed Communication Rounds**: Configurable number of training rounds
+- **Multiple Strategies**: Supports both FedAvg and FedProx
+- **Comprehensive Logging**:
+  - Per-round global accuracy
+  - Per-round global loss
+  - Client participation per round
+  - Training history saved to `logs/training_history.json`
+  - Training summary saved to `logs/training_summary.md`
+- **Privacy-Preserving**: Optional differential privacy support
+
+### Usage
+
+#### Run with FedAvg (default):
+
+```bash
+python run_federated_experiments.py --num-rounds 10
+```
+
+#### Run with FedProx:
+
+```bash
+python run_federated_experiments.py --strategy fedprox --num-rounds 10 --proximal-mu 0.1
+```
+
+#### Run with Differential Privacy:
+
+```bash
+python run_federated_experiments.py --use-dp --dp-epsilon 1.0 --dp-delta 1e-5 --num-rounds 10
+```
+
+#### Custom Configuration:
+
+```bash
+python run_federated_experiments.py \
+  --num-clients 5 \
+  --num-rounds 10 \
+  --strategy fedavg \
+  --random-seed 42 \
+  --output-dir logs
+```
+
+### Command-line Options
+
+- `--num-clients`: Number of hospital clients (default: 5)
+- `--num-rounds`: Number of federated training rounds (default: 10)
+- `--strategy`: Aggregation strategy - `fedavg` or `fedprox` (default: fedavg)
+- `--use-dp`: Enable differential privacy protection (flag)
+- `--dp-epsilon`: Privacy budget epsilon (default: 1.0)
+- `--dp-delta`: Privacy budget delta (default: 1e-5)
+- `--dp-l2-norm-clip`: L2 norm clipping threshold (default: 1.0)
+- `--proximal-mu`: Proximal term for FedProx (default: 0.1)
+- `--data-path`: Path to dataset (default: data/heart_failure.csv)
+- `--random-seed`: Random seed for reproducibility (default: 42)
+- `--output-dir`: Directory to save results (default: logs)
+
+### Output Files
+
+After running an experiment, results are saved to the `logs/` directory:
+
+#### `logs/training_history.json`
+
+Contains complete training metrics in JSON format:
+- Experiment configuration
+- Per-round metrics (loss, accuracy, client participation, total samples)
+- Timestamp
+
+Example:
+```json
+{
+  "experiment_config": {
+    "num_clients": 5,
+    "num_rounds": 10,
+    "strategy": "fedavg",
+    "model": "LSTM (PRIMARY)",
+    "data_partitioning": "Non-IID"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "global_loss": 0.6776,
+      "global_accuracy": 0.5588,
+      "participating_clients": 5,
+      "total_samples": 238
+    }
+  ]
+}
+```
+
+#### `logs/training_summary.md`
+
+A human-readable markdown report containing:
+- Experiment configuration
+- Per-round metrics in a table
+- Training summary statistics (initial/final/improvement)
+- Privacy guarantees
+- Client participation summary
+
+### Constraints
+
+The script adheres to the following constraints:
+- Does NOT modify model architecture
+- Does NOT modify preprocessing
+- Uses existing DP configuration when enabled
+- Only logs aggregated metrics (no patient-level data)
+
 ## Project Structure
 
 ```
@@ -496,6 +609,9 @@ UROP-B2-1/
 │   ├── data_profile.md             # Dataset profiling report
 │   ├── sampling_summary.md         # Sampling operation report
 │   └── client_partition_summary.md # Client partitioning report
+├── logs/
+│   ├── training_history.json       # Federated training metrics (JSON)
+│   └── training_summary.md         # Federated training summary (Markdown)
 ├── validate_dataset.py             # Repository and dataset validation script
 ├── test_preprocessing.py           # Preprocessing pipeline test suite
 ├── test_sampling.py                # Dataset sampling test suite
@@ -511,6 +627,7 @@ UROP-B2-1/
 ├── demo_federated_client.py        # Federated client demonstration
 ├── demo_federated_training.py      # Full federated training session demonstration
 ├── demo_differential_privacy.py    # Differential privacy demonstration
+├── run_federated_experiments.py    # End-to-end federated training experiments
 ├── generate_data_profile.py        # Dataset profiling script
 ├── requirements.txt                # Python dependencies
 └── README.md                       # This file
