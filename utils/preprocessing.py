@@ -18,6 +18,8 @@ Author: Federated Learning Medical AI Project
 import numpy as np
 import pandas as pd
 import pickle
+import json
+import os
 from typing import Tuple, Optional, Union
 
 
@@ -57,6 +59,27 @@ class HeartFailurePreprocessor:
         self.feature_medians = None
         self.feature_columns = None
         self.is_fitted = False
+    
+    @staticmethod
+    def _get_safe_paths(filepath: str) -> Tuple[str, str]:
+        """
+        Get consistent file paths for safe serialization.
+        
+        Args:
+            filepath: Base filepath (with or without .json extension)
+        
+        Returns:
+            Tuple of (json_path, base_path) for consistent file naming
+        """
+        # Ensure .json extension (use splitext for robustness with arbitrary inputs)
+        base_without_ext, current_ext = os.path.splitext(filepath)
+        if current_ext != '.json':
+            json_path = filepath + '.json'
+            base_path = filepath
+        else:
+            json_path = filepath
+            base_path = base_without_ext
+        return json_path, base_path
     
     def fit(self, data: Union[pd.DataFrame, np.ndarray]) -> 'HeartFailurePreprocessor':
         """
@@ -223,6 +246,46 @@ class HeartFailurePreprocessor:
         with open(filepath, 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
     
+    def save_safe(self, filepath: str) -> None:
+        """
+        Save the fitted preprocessor using JSON + NumPy arrays (safer alternative to pickle).
+        
+        This method provides safer serialization that is less susceptible to
+        NumPy version incompatibilities. Recommended for inference-only code.
+        
+        Args:
+            filepath (str): Path where the preprocessor should be saved.
+                Recommended extension: .json
+        
+        Raises:
+            RuntimeError: If preprocessor has not been fitted.
+        
+        Note:
+            This saves preprocessing statistics as JSON + NPY arrays, avoiding
+            pickle-related NumPy version incompatibilities.
+        """
+        if not self.is_fitted:
+            raise RuntimeError("Cannot save unfitted preprocessor. Call fit() first.")
+        
+        # Get consistent file paths
+        json_path, base_path = HeartFailurePreprocessor._get_safe_paths(filepath)
+        
+        # Save metadata and statistics as JSON
+        metadata = {
+            'target_column': self.target_column,
+            'feature_columns': self.feature_columns,
+            'is_fitted': self.is_fitted
+        }
+        
+        # Save JSON metadata
+        with open(json_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        # Save NumPy arrays separately (use consistent naming)
+        np.save(f'{base_path}_means.npy', self.feature_means)
+        np.save(f'{base_path}_stds.npy', self.feature_stds)
+        np.save(f'{base_path}_medians.npy', self.feature_medians)
+    
     @staticmethod
     def load(filepath: str) -> 'HeartFailurePreprocessor':
         """
@@ -236,17 +299,92 @@ class HeartFailurePreprocessor:
         
         Raises:
             FileNotFoundError: If the file does not exist.
+            ImportError: If incompatible NumPy version causes deserialization failure.
         
         Warning:
             Only load preprocessor files from trusted sources. Pickle can execute
             arbitrary code during deserialization, which could be a security risk
             if loading files from untrusted origins.
+            
+        Academic Note:
+            If you encounter "ModuleNotFoundError: No module named 'numpy._core'",
+            this indicates a NumPy version mismatch. NumPy 2.x changed internal
+            module paths, breaking compatibility with artifacts serialized under
+            NumPy 1.x. To fix this:
+            1. Ensure NumPy is pinned to the same version used during training
+            2. Regenerate preprocessing artifacts in the current environment
+            3. Use save_safe()/load_safe() for safer serialization
         """
-        with open(filepath, 'rb') as f:
-            preprocessor = pickle.load(f)
+        try:
+            with open(filepath, 'rb') as f:
+                preprocessor = pickle.load(f)
+            
+            if not isinstance(preprocessor, HeartFailurePreprocessor):
+                raise ValueError("Loaded object is not a HeartFailurePreprocessor instance")
+            
+            return preprocessor
+        except (ImportError, ModuleNotFoundError) as e:
+            # Handle NumPy version incompatibility
+            if 'numpy._core' in str(e) or 'numpy.core' in str(e):
+                raise ImportError(
+                    "\n" + "=" * 80 + "\n"
+                    "INCOMPATIBLE PREPROCESSING ARTIFACT DETECTED\n"
+                    "=" * 80 + "\n\n"
+                    "Error: The preprocessing artifact was created with a different NumPy version.\n\n"
+                    "Root Cause:\n"
+                    "  NumPy 2.x introduced breaking changes to internal module paths,\n"
+                    "  making pickle artifacts serialized under NumPy 1.x incompatible.\n\n"
+                    "Resolution:\n"
+                    "  1. Ensure requirements.txt specifies the correct NumPy version (e.g., numpy==1.26.4)\n"
+                    "  2. Reinstall dependencies: pip install -r requirements.txt\n"
+                    "  3. Regenerate preprocessing artifacts in the pinned environment:\n"
+                    "     - Delete old .pkl files\n"
+                    "     - Re-run preprocessing: python demo_preprocessing.py\n"
+                    "  4. Alternatively, use save_safe()/load_safe() for version-independent serialization\n\n"
+                    "Academic Context:\n"
+                    "  This is a known reproducibility issue in research systems.\n"
+                    "  ML artifacts must be regenerated when dependencies change to ensure\n"
+                    "  deterministic and verifiable results.\n\n"
+                    f"Original Error: {str(e)}\n"
+                    + "=" * 80
+                ) from e
+            else:
+                # Re-raise other import errors
+                raise
+    
+    @staticmethod
+    def load_safe(filepath: str) -> 'HeartFailurePreprocessor':
+        """
+        Load a fitted preprocessor from JSON + NumPy arrays (safer alternative to pickle).
         
-        if not isinstance(preprocessor, HeartFailurePreprocessor):
-            raise ValueError("Loaded object is not a HeartFailurePreprocessor instance")
+        This method provides safer deserialization that is immune to
+        NumPy version incompatibilities.
+        
+        Args:
+            filepath (str): Path to the saved preprocessor JSON file.
+        
+        Returns:
+            HeartFailurePreprocessor: Loaded preprocessor instance.
+        
+        Raises:
+            FileNotFoundError: If required files are not found.
+        """
+        # Get consistent file paths
+        json_path, base_path = HeartFailurePreprocessor._get_safe_paths(filepath)
+        
+        # Load JSON metadata
+        with open(json_path, 'r') as f:
+            metadata = json.load(f)
+        
+        # Create preprocessor instance
+        preprocessor = HeartFailurePreprocessor(target_column=metadata['target_column'])
+        preprocessor.feature_columns = metadata['feature_columns']
+        preprocessor.is_fitted = metadata['is_fitted']
+        
+        # Load NumPy arrays (use consistent naming)
+        preprocessor.feature_means = np.load(f'{base_path}_means.npy')
+        preprocessor.feature_stds = np.load(f'{base_path}_stds.npy')
+        preprocessor.feature_medians = np.load(f'{base_path}_medians.npy')
         
         return preprocessor
     
